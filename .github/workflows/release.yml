@@ -1,0 +1,41 @@
+name: Release BongLauncher
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate source
+        run: npm run check
+
+      - name: Build Windows packages
+        run: npm run build:release
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            dist/BongLauncher-Setup-*.exe
+            dist/BongLauncher-Setup-*.exe.blockmap
+            dist/BongLauncher-Portable-*.exe
+            dist/latest.yml

@@ -1,0 +1,20 @@
+{
+  "version": "2026.06.13-1",
+  "generatedAt": "2026-06-13T00:00:00.000Z",
+  "files": [
+    {
+      "path": "mods/example-mod.jar",
+      "url": "https://cdn.example.com/servercraft/mods/example-mod.jar",
+      "size": 123456,
+      "sha256": "replace_with_64_character_sha256",
+      "required": true
+    },
+    {
+      "path": "config/example.toml",
+      "url": "https://cdn.example.com/servercraft/config/example.toml",
+      "size": 123,
+      "sha256": "replace_with_64_character_sha256",
+      "required": true
+    }
+  ]
+}

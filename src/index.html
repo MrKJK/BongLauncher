@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ServerCraft Launcher</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main class="launcher">
+    <div class="background" aria-hidden="true"></div>
+    <div class="shade" aria-hidden="true"></div>
+
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-mark">S</div>
+        <div>
+          <strong id="launcher-name">ServerCraft</strong>
+          <span>MINECRAFT JAVA EDITION</span>
+        </div>
+      </div>
+
+      <div class="server-summary">
+        <span id="server-state" class="state checking">확인 중</span>
+        <div>
+          <strong id="server-name">서버 정보를 불러오는 중...</strong>
+          <span id="motd">잠시만 기다려 주세요.</span>
+        </div>
+        <div class="server-metric">
+          <strong id="players">- / -</strong>
+          <span>플레이어</span>
+        </div>
+        <div class="server-metric">
+          <strong id="ping">- ms</strong>
+          <span>핑</span>
+        </div>
+        <button id="refresh" class="round-button" title="서버 정보 새로고침">↻</button>
+      </div>
+    </header>
+
+    <section class="bottom-area">
+      <aside class="notice-panel">
+        <p class="section-label">공지사항</p>
+        <h2>서버 전용 런처에 오신 것을 환영합니다</h2>
+        <p>
+          서버 접속에 필요한 모드와 리소스팩을 자동으로 설치합니다.
+          문제가 발생하면 파일 검사를 실행해 주세요.
+        </p>
+        <div class="profile-info">
+          <span><b id="mc-version">-</b> Minecraft</span>
+          <span><b id="loader">-</b> Loader</span>
+          <span><b id="integrity">확인 전</b> 파일 상태</span>
+        </div>
+        <label class="toggle">
+          <input id="auto-connect" type="checkbox">
+          <span class="switch"></span>
+          게임 로딩 후 서버 자동 접속
+        </label>
+        <span id="game-dir" class="hidden-path"></span>
+      </aside>
+
+      <section class="play-zone">
+        <button id="play" class="play-button" disabled>
+          <span class="play-icon">▶</span>
+          <span>게임 시작</span>
+        </button>
+        <p id="status">런처를 준비하고 있습니다.</p>
+        <progress id="progress" max="100" value="0"></progress>
+      </section>
+
+      <nav class="quick-actions" aria-label="런처 메뉴">
+        <button id="folder" class="action-button" title="게임 폴더">
+          <span class="action-icon">▣</span>
+          <span>폴더</span>
+        </button>
+        <button id="verify" class="action-button" title="파일 검사">
+          <span class="action-icon">✓</span>
+          <span>검사</span>
+        </button>
+        <button id="config" class="action-button" title="런처 설정">
+          <span class="action-icon">⚙</span>
+          <span>설정</span>
+        </button>
+        <button id="login" class="account-button" title="Microsoft 계정">
+          <span class="avatar">M</span>
+          <span id="account">로그인</span>
+        </button>
+      </nav>
+    </section>
+
+    <details class="log-drawer">
+      <summary>상세 로그</summary>
+      <pre id="log"></pre>
+    </details>
+
+    <span id="launcher-version" class="version">launcher v-</span>
+  </main>
+  <script src="renderer.js"></script>
+</body>
+</html>

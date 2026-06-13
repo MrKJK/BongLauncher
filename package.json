@@ -1,0 +1,70 @@
+{
+  "name": "bonglauncher",
+  "version": "0.2.0",
+  "description": "Minecraft server-specific launcher with Microsoft login, modpack sync, integrity checks, and server status.",
+  "main": "src/main.cjs",
+  "type": "commonjs",
+  "scripts": {
+    "start": "electron .",
+    "check": "node --check src/main.cjs && node --check src/preload.cjs && node --check src/renderer.js",
+    "build": "electron-builder --win nsis portable --publish never",
+    "build:release": "electron-builder --win nsis portable --publish never",
+    "manifest": "node tools/create-manifest.cjs",
+    "github:configure": "node tools/configure-github.cjs"
+  },
+  "build": {
+    "appId": "kr.bongbongli.launcher",
+    "productName": "BongLauncher",
+    "files": [
+      "src/**/*",
+      "launcher-config.json",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "launcher-config.json",
+        "to": "launcher-config.json"
+      }
+    ],
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ]
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "MrKJK",
+      "repo": "BongLauncher"
+    },
+    "nsis": {
+      "artifactName": "${productName}-Setup-${version}.${ext}",
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    },
+    "portable": {
+      "artifactName": "${productName}-Portable-${version}.${ext}"
+    }
+  },
+  "dependencies": {
+    "@xmcl/core": "^2.15.1",
+    "@xmcl/installer": "^6.1.0",
+    "@xmcl/user": "^4.0.0",
+    "electron-updater": "^6.6.2",
+    "extract-zip": "^2.0.1",
+    "undici": "7.27.2"
+  },
+  "devDependencies": {
+    "electron": "^36.0.0",
+    "electron-builder": "^26.0.0"
+  },
+  "overrides": {
+    "undici": "$undici",
+    "uuid": "11.1.1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MrKJK/BongLauncher.git"
+  },
+  "homepage": "https://MrKJK.github.io/BongLauncher"
+}
