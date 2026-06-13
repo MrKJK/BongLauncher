@@ -47,6 +47,7 @@ function setupPaths() {
     account: path.join(root, "account.bin"),
     manifest: path.join(root, "manifest.json"),
     remoteConfig: path.join(root, "remote-config.json"),
+    gameOptionsState: path.join(root, "game-options-state.json"),
     session: path.join(root, "game", ".launcher", "session.json")
   };
 }
@@ -708,6 +709,23 @@ async function installGame(javaPath) {
 }
 
 async function applyGameOptions() {
+  const options = config.gameOptions || {};
+  const applyMode = options.applyMode || "once";
+  if (applyMode === "never") return false;
+
+  const managedOptions = {
+    lang: options.lang,
+    resourcePacks: options.resourcePacks,
+    incompatibleResourcePacks: options.incompatibleResourcePacks,
+    keyBindings: options.keyBindings
+  };
+  const fingerprint = options.revision || crypto
+    .createHash("sha256")
+    .update(JSON.stringify(managedOptions))
+    .digest("hex");
+  const appliedState = await readJson(paths.gameOptionsState, {});
+  if (applyMode === "once" && appliedState.fingerprint === fingerprint) return false;
+
   const file = path.join(paths.game, "options.txt");
   let lines = [];
   try {
@@ -717,7 +735,6 @@ async function applyGameOptions() {
     const split = line.indexOf(":");
     return split === -1 ? [line, ""] : [line.slice(0, split), line.slice(split + 1)];
   }));
-  const options = config.gameOptions;
   if (options.lang) values.set("lang", options.lang);
   if (Array.isArray(options.resourcePacks)) values.set("resourcePacks", JSON.stringify(options.resourcePacks));
   if (Array.isArray(options.incompatibleResourcePacks)) {
@@ -728,6 +745,11 @@ async function applyGameOptions() {
   }
   await fsp.mkdir(paths.game, { recursive: true });
   await fsp.writeFile(file, [...values].map(([key, value]) => `${key}:${value}`).join("\n") + "\n", "utf8");
+  await writeJson(paths.gameOptionsState, {
+    fingerprint,
+    appliedAt: new Date().toISOString()
+  });
+  return true;
 }
 
 function manifestDigest(manifest) {
@@ -776,8 +798,11 @@ async function launchGame() {
   const manifest = await syncDistribution();
   const verification = await verifyFiles(manifest);
   if (!verification.valid) throw new Error(`서버 접속 차단: ${verification.problems.join(", ")}`);
-  sendProgress("게임 설정을 적용하고 있습니다.", 72);
-  await applyGameOptions();
+  const optionsApplied = await applyGameOptions();
+  sendProgress(
+    optionsApplied ? "새 게임 설정을 한 번 적용했습니다." : "사용자 게임 설정을 유지합니다.",
+    72
+  );
   const installed = await readJson(path.join(paths.root, "installed-profile.json"));
   const expectedProfile = installed
     && installed.minecraftVersion === config.minecraft.version

@@ -16,5 +16,12 @@
   "distribution": {
     "manifestUrl": "https://MrKJK.github.io/BongLauncher/files/manifest.json",
     "strictMode": true
+  },
+  "gameOptions": {
+    "applyMode": "once",
+    "lang": "ko_kr",
+    "resourcePacks": [],
+    "incompatibleResourcePacks": [],
+    "keyBindings": {}
   }
 }

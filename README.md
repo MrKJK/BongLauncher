@@ -139,6 +139,7 @@ npm.cmd run manifest -- pack manifest.json https://cdn.example.com/servercraft/f
 ```json
 {
   "gameOptions": {
+    "applyMode": "once",
     "lang": "ko_kr",
     "resourcePacks": ["file/server-resources.zip"],
     "incompatibleResourcePacks": [],
@@ -152,6 +153,21 @@ npm.cmd run manifest -- pack manifest.json https://cdn.example.com/servercraft/f
 
 마인크래프트 버전에 따라 키 이름이나 값 형식이 다를 수 있으므로 해당 버전의
 `options.txt` 형식을 사용해야 합니다.
+
+`applyMode` 값:
+
+- `once`: 설정 내용이 변경된 뒤 첫 게임 실행에만 적용하고 이후 사용자 수정을 유지
+- `always`: 게임을 실행할 때마다 지정한 설정을 다시 적용
+- `never`: 런처에서 `options.txt`를 수정하지 않음
+
+`once` 모드에서는 `lang`, `resourcePacks`, `incompatibleResourcePacks`,
+`keyBindings` 중 하나라도 원격 설정에서 바뀌면 새로운 설정으로 인식합니다.
+업데이트 후 첫 실행에 한 번 적용된 뒤에는 사용자가 `options.txt`를 수정해도
+다음 실행에서 초기화되지 않습니다.
+
+`options.txt`는 모드팩 `manifest.json`에 포함하지 않아야 합니다.
+manifest에 포함하면 파일 무결성 검사 대상이 되어 수정할 때마다 원본으로
+복구됩니다. 기본 `ignoredFiles`에는 `options.txt`가 이미 포함되어 있습니다.
 
 ## 설치 파일 만들기
 

@@ -46,6 +46,7 @@
     "checkOnStart": true
   },
   "gameOptions": {
+    "applyMode": "once",
     "lang": "ko_kr",
     "resourcePacks": [],
     "incompatibleResourcePacks": [],
