@@ -1,6 +1,6 @@
 {
   "name": "bonglauncher",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "description": "Minecraft server-specific launcher with Microsoft login, modpack sync, integrity checks, and server status.",
   "main": "src/main.cjs",
   "type": "commonjs",
