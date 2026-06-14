@@ -1,6 +1,6 @@
 {
   "name": "bonglauncher",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Minecraft server-specific launcher with Microsoft login, modpack sync, integrity checks, and server status.",
   "main": "src/main.cjs",
   "type": "commonjs",
@@ -9,6 +9,7 @@
     "check": "node --check src/main.cjs && node --check src/preload.cjs && node --check src/renderer.js",
     "build": "electron-builder --win nsis portable --publish never",
     "build:release": "electron-builder --win nsis portable --publish never",
+    "icon:build": "node tools/create-icon.mjs",
     "manifest": "node tools/create-manifest.cjs",
     "github:configure": "node tools/configure-github.cjs"
   },
@@ -27,6 +28,7 @@
       }
     ],
     "win": {
+      "icon": "build/icon.ico",
       "target": [
         "nsis",
         "portable"
@@ -56,7 +58,9 @@
   },
   "devDependencies": {
     "electron": "^36.0.0",
-    "electron-builder": "^26.0.0"
+    "electron-builder": "^26.0.0",
+    "png-to-ico": "^3.0.1",
+    "sharp": "^0.35.1"
   },
   "overrides": {
     "undici": "$undici",
