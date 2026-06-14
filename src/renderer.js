@@ -3,7 +3,7 @@ const elements = Object.fromEntries(
     "launcher-name", "account", "server-state", "server-name", "motd", "players",
     "ping", "mc-version", "loader", "game-dir", "integrity", "auto-connect",
     "status", "progress", "log", "refresh", "folder", "config", "verify", "login", "play",
-    "launcher-version"
+    "launcher-version", "notice-title", "notice-message"
   ].map((id) => [id, document.getElementById(id)])
 );
 
@@ -49,6 +49,10 @@ async function initialize() {
   document.title = state.config.windowTitle;
   elements["launcher-version"].textContent = `launcher v${state.appVersion}`;
   elements["launcher-name"].textContent = state.config.launcherName;
+  elements["notice-title"].textContent = state.config.notice?.title
+    || "서버 전용 런처에 오신 것을 환영합니다";
+  elements["notice-message"].textContent = state.config.notice?.message
+    || "서버 접속에 필요한 모드와 리소스팩을 자동으로 설치합니다. 문제가 발생하면 파일 검사를 실행해 주세요.";
   elements["server-name"].textContent = state.config.server.name;
   elements["mc-version"].textContent = state.config.minecraft.version;
   elements.loader.textContent = state.config.minecraft.loader.toUpperCase();

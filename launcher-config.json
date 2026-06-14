@@ -1,6 +1,10 @@
 {
   "launcherName": "BongLauncher",
   "windowTitle": "봉봉리 전용 런처",
+  "notice": {
+    "title": "서버 전용 런처에 오신 것을 환영합니다",
+    "message": "서버 접속에 필요한 모드와 리소스팩을 자동으로 설치합니다. 문제가 발생하면 파일 검사를 실행해 주세요."
+  },
   "server": {
     "name": "Bongbongli",
     "host": "bongbongli.kr",

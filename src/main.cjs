@@ -73,7 +73,7 @@ function mergeObject(base, override) {
 }
 
 function applyRemoteConfig(base, remote) {
-  const allowed = ["server", "minecraft", "distribution", "gameOptions", "security"];
+  const allowed = ["notice", "server", "minecraft", "distribution", "gameOptions", "security"];
   const sanitized = {};
   for (const key of allowed) {
     if (remote?.[key] && typeof remote[key] === "object") sanitized[key] = remote[key];
