@@ -1,6 +1,6 @@
 {
   "name": "bonglauncher",
-  "version": "0.2.5",
+  "version": "0.2.6",
   "description": "Minecraft server-specific launcher with Microsoft login, modpack sync, integrity checks, and server status.",
   "main": "src/main.cjs",
   "type": "commonjs",
@@ -9,7 +9,9 @@
     "check": "node --check src/main.cjs && node --check src/preload.cjs && node --check src/renderer.js",
     "build": "electron-builder --win nsis portable --publish never",
     "build:release": "electron-builder --win nsis portable --publish never",
+    "build:mac": "electron-builder --mac dmg zip --universal --publish never",
     "icon:build": "node tools/create-icon.mjs",
+    "icon:mac": "node tools/create-mac-icon.mjs",
     "manifest": "node tools/create-manifest.cjs",
     "github:configure": "node tools/configure-github.cjs"
   },
@@ -34,6 +36,16 @@
         "portable"
       ]
     },
+    "mac": {
+      "icon": "build/icon.icns",
+      "category": "public.app-category.games",
+      "identity": null,
+      "artifactName": "${productName}-${version}-mac-universal.${ext}",
+      "target": [
+        "dmg",
+        "zip"
+      ]
+    },
     "publish": {
       "provider": "github",
       "owner": "MrKJK",
@@ -54,7 +66,7 @@
     "@xmcl/user": "^4.0.0",
     "electron-updater": "^6.6.2",
     "extract-zip": "^2.0.1",
-    "undici": "7.27.2"
+    "undici": "^7.28.0"
   },
   "devDependencies": {
     "electron": "^36.0.0",
