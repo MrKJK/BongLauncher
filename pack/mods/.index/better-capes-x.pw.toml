@@ -1,0 +1,17 @@
+filename = 'BetterCapes-1.5.1.1+1.21.4.jar'
+name = 'Cape | Better Capes'
+side = 'client'
+x-prismlauncher-loaders = [ 'fabric' ]
+x-prismlauncher-mc-versions = [ '1.21.4', '1.21.4' ]
+x-prismlauncher-release-type = 'release'
+x-prismlauncher-version-number = '1.5.1.1'
+
+[download]
+hash = '253c3a2d9022ef2b67851d8f4ee366bbdaa89eac90fe8cd9b73a8db9364cee23f5528149f76665573666e6598f633c3de46621346b0d0b6a79ee0b5663c437b0'
+hash-format = 'sha512'
+mode = 'url'
+url = 'https://cdn.modrinth.com/data/c8slFMT1/versions/bvsRpFJj/BetterCapes-1.5.1.1%2B1.21.4.jar'
+
+[update.modrinth]
+mod-id = 'c8slFMT1'
+version = 'bvsRpFJj'
