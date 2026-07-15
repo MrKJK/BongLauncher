@@ -31,6 +31,9 @@
       "config",
       "shaderpacks"
     ],
+    "onceFiles": [
+      "options.txt"
+    ],
     "ignoredFiles": [
       "options.txt",
       "servers.dat",

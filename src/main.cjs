@@ -48,6 +48,7 @@ function setupPaths() {
     manifest: path.join(root, "manifest.json"),
     remoteConfig: path.join(root, "remote-config.json"),
     gameOptionsState: path.join(root, "game-options-state.json"),
+    onceFilesState: path.join(root, "once-files-state.json"),
     session: path.join(root, "game", ".launcher", "session.json")
   };
 }
@@ -500,6 +501,22 @@ function isIgnored(relative) {
   return config.distribution.ignoredFiles.some((pattern) => wildcardToRegExp(pattern).test(relative));
 }
 
+function isOnceFile(relative) {
+  const patterns = Array.isArray(config.distribution.onceFiles) ? config.distribution.onceFiles : [];
+  return patterns.some((pattern) => wildcardToRegExp(pattern).test(relative));
+}
+
+function onceFileFingerprint(item) {
+  return item.sha256?.toLowerCase() || crypto
+    .createHash("sha256")
+    .update(JSON.stringify({
+      path: normalizeRelative(item.path),
+      url: item.url,
+      size: item.size
+    }))
+    .digest("hex");
+}
+
 async function walkFiles(directory, root = directory) {
   const result = [];
   let entries = [];
@@ -538,9 +555,11 @@ async function verifyFiles(manifest) {
     const relative = normalizeRelative(item.path);
     expected.set(relative.toLowerCase(), item);
     const absolute = path.join(paths.game, relative);
+    const applyOnce = isOnceFile(relative);
     try {
       const stat = await fsp.stat(absolute);
       if (!stat.isFile()) throw new Error("not-file");
+      if (applyOnce) continue;
       if (item.size != null && stat.size !== item.size) {
         problems.push(`${relative}: 크기 불일치`);
       } else if (item.sha256 && await sha256(absolute) !== item.sha256.toLowerCase()) {
@@ -564,6 +583,42 @@ async function verifyFiles(manifest) {
   return { valid: problems.length === 0, problems };
 }
 
+async function getPendingOnceFiles(manifest) {
+  const state = await readJson(paths.onceFilesState, { files: {} });
+  const files = state.files || {};
+  const pending = [];
+  for (const item of manifest.files) {
+    const relative = normalizeRelative(item.path);
+    if (!isOnceFile(relative)) continue;
+    const key = relative.toLowerCase();
+    const absolute = path.join(paths.game, relative);
+    const fingerprint = onceFileFingerprint(item);
+    let exists = false;
+    try {
+      exists = (await fsp.stat(absolute)).isFile();
+    } catch {}
+    if (!exists || files[key]?.fingerprint !== fingerprint) {
+      pending.push(item);
+    }
+  }
+  return pending;
+}
+
+async function recordOnceFiles(items) {
+  const applied = items.filter((item) => isOnceFile(normalizeRelative(item.path)));
+  if (applied.length === 0) return;
+  const state = await readJson(paths.onceFilesState, { files: {} });
+  const files = state.files || {};
+  for (const item of applied) {
+    const relative = normalizeRelative(item.path);
+    files[relative.toLowerCase()] = {
+      fingerprint: onceFileFingerprint(item),
+      appliedAt: new Date().toISOString()
+    };
+  }
+  await writeJson(paths.onceFilesState, { files });
+}
+
 async function downloadFile(item, index, total) {
   const relative = normalizeRelative(item.path);
   const destination = path.join(paths.game, relative);
@@ -582,13 +637,23 @@ async function downloadFile(item, index, total) {
 
 async function syncDistribution() {
   const manifest = await getManifest(true);
+  const pendingOnceFiles = await getPendingOnceFiles(manifest);
   const verification = await verifyFiles(manifest);
-  if (verification.valid) return manifest;
   const badPaths = new Set(verification.problems.map((problem) => problem.split(":")[0].toLowerCase()));
-  const downloads = manifest.files.filter((item) => badPaths.has(normalizeRelative(item.path).toLowerCase()));
+  const downloadsByPath = new Map();
+  for (const item of pendingOnceFiles) {
+    downloadsByPath.set(normalizeRelative(item.path).toLowerCase(), item);
+  }
+  for (const item of manifest.files) {
+    const key = normalizeRelative(item.path).toLowerCase();
+    if (badPaths.has(key)) downloadsByPath.set(key, item);
+  }
+  const downloads = [...downloadsByPath.values()];
+  if (verification.valid && downloads.length === 0) return manifest;
   for (let index = 0; index < downloads.length; index += 1) {
     await downloadFile(downloads[index], index, Math.max(downloads.length, 1));
   }
+  await recordOnceFiles(downloads);
   if (config.distribution.strictMode) {
     const expected = new Set(manifest.files.map((item) => normalizeRelative(item.path).toLowerCase()));
     for (const directory of config.distribution.watchDirectories) {
