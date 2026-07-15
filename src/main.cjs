@@ -15,6 +15,7 @@ let account;
 let currentManifest;
 let gameStarting = false;
 let gameProcess;
+const preservedGameFiles = new Set(["server.dat", "servers.dat"]);
 
 function configPath() {
   return app.isPackaged
@@ -529,6 +530,8 @@ function wildcardToRegExp(pattern) {
 }
 
 function isIgnored(relative) {
+  const normalized = relative.replaceAll("\\", "/").toLowerCase();
+  if (preservedGameFiles.has(normalized)) return true;
   return config.distribution.ignoredFiles.some((pattern) => wildcardToRegExp(pattern).test(relative));
 }
 
@@ -585,8 +588,9 @@ async function verifyFiles(manifest) {
   for (const item of manifest.files) {
     const relative = normalizeRelative(item.path);
     expected.set(relative.toLowerCase(), item);
-    const absolute = path.join(paths.game, relative);
     const applyOnce = isOnceFile(relative);
+    if (isIgnored(relative) && !applyOnce) continue;
+    const absolute = path.join(paths.game, relative);
     try {
       const stat = await fsp.stat(absolute);
       if (!stat.isFile()) throw new Error("not-file");

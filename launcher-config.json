@@ -36,6 +36,7 @@
     ],
     "ignoredFiles": [
       "options.txt",
+      "server.dat",
       "servers.dat",
       "usercache.json",
       "logs/**",

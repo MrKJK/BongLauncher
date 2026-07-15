@@ -22,6 +22,16 @@
     "strictMode": true,
     "onceFiles": [
       "options.txt"
+    ],
+    "ignoredFiles": [
+      "options.txt",
+      "server.dat",
+      "servers.dat",
+      "usercache.json",
+      "logs/**",
+      "crash-reports/**",
+      "screenshots/**",
+      "saves/**"
     ]
   },
   "gameOptions": {
