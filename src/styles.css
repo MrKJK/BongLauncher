@@ -1,4 +1,5 @@
 :root {
+  --accent-color: #2ecc78;
   color-scheme: dark;
   font-family: "Pretendard", "Segoe UI", "Malgun Gothic", sans-serif;
   color: #f5f8f6;
@@ -211,7 +212,7 @@ button {
 }
 
 .toggle input:checked + .switch {
-  background: #2ecc78;
+  background: var(--accent-color);
 }
 
 .toggle input:checked + .switch::after {
@@ -280,8 +281,20 @@ progress {
   border: 0;
   border-radius: 4px;
   overflow: hidden;
-  accent-color: #4ee78e;
+  accent-color: var(--accent-color);
   background: rgba(255, 255, 255, .12);
+}
+
+progress::-webkit-progress-bar {
+  background: rgba(255, 255, 255, .12);
+}
+
+progress::-webkit-progress-value {
+  background: var(--accent-color);
+}
+
+progress::-moz-progress-bar {
+  background: var(--accent-color);
 }
 
 .quick-actions {
@@ -342,11 +355,6 @@ progress {
   background-position: center;
   background-size: cover;
   overflow: hidden;
-}
-
-.avatar.has-skin {
-  border: 1px solid rgba(255, 255, 255, .22);
-  background-color: rgba(255, 255, 255, .1);
 }
 
 .avatar-image {

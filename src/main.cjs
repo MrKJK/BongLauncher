@@ -794,6 +794,19 @@ async function installGame(javaPath) {
   return launchVersion;
 }
 
+async function ensureLaunchLibraries(launchVersion) {
+  const installer = require("@xmcl/installer");
+  const { Version } = require("@xmcl/core");
+  sendProgress("필수 라이브러리를 확인하고 있습니다.", 82);
+  const resolvedVersion = await Version.parse(paths.game, launchVersion);
+  try {
+    await installer.installLibraries(resolvedVersion);
+  } catch (error) {
+    throw new Error(`Minecraft 필수 라이브러리 설치 실패: ${error.message}`);
+  }
+  return resolvedVersion;
+}
+
 async function applyGameOptions() {
   const options = config.gameOptions || {};
   const applyMode = options.applyMode || "once";
@@ -895,6 +908,7 @@ async function launchGame() {
     && installed.loader === config.minecraft.loader.toLowerCase()
     && installed.loaderVersion === config.minecraft.loaderVersion;
   const launchVersion = expectedProfile ? installed.launchVersion : await installGame(javaPath);
+  const resolvedVersion = await ensureLaunchLibraries(launchVersion);
   await createLaunchSession(manifest);
 
   const { launch, createMinecraftProcessWatcher } = require("@xmcl/core");
@@ -906,7 +920,7 @@ async function launchGame() {
     userType: "mojang",
     launcherName: config.launcherName,
     launcherBrand: config.launcherName,
-    version: launchVersion,
+    version: resolvedVersion,
     gamePath: paths.game,
     resourcePath: paths.game,
     javaPath,
