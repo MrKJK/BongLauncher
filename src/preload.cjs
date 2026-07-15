@@ -11,6 +11,7 @@ contextBridge.exposeInMainWorld("launcher", {
   openGameFolder: () => ipcRenderer.invoke("folder:game"),
   openConfig: () => ipcRenderer.invoke("folder:config"),
   setAutoConnect: (enabled) => ipcRenderer.invoke("settings:auto-connect", enabled),
+  saveSettings: (settings) => ipcRenderer.invoke("settings:save", settings),
   onProgress: (callback) => ipcRenderer.on("progress", (_, value) => callback(value)),
   onGameLog: (callback) => ipcRenderer.on("game-log", (_, value) => callback(value))
 });

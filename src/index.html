@@ -12,14 +12,6 @@
     <div class="shade" aria-hidden="true"></div>
 
     <header class="topbar">
-      <div class="brand">
-        <div class="brand-mark">S</div>
-        <div>
-          <strong id="launcher-name">ServerCraft</strong>
-          <span>MINECRAFT JAVA EDITION</span>
-        </div>
-      </div>
-
       <div class="server-summary">
         <span id="server-state" class="state checking">확인 중</span>
         <div>
@@ -39,25 +31,18 @@
     </header>
 
     <section class="bottom-area">
-      <aside class="notice-panel">
-        <p class="section-label">공지사항</p>
-        <h2 id="notice-title">서버 전용 런처에 오신 것을 환영합니다</h2>
-        <p id="notice-message">
-          서버 접속에 필요한 모드와 리소스팩을 자동으로 설치합니다.
-          문제가 발생하면 파일 검사를 실행해 주세요.
-        </p>
-        <div class="profile-info">
-          <span><b id="mc-version">-</b> Minecraft</span>
-          <span><b id="loader">-</b> Loader</span>
-          <span><b id="integrity">확인 전</b> 파일 상태</span>
-        </div>
+      <section class="connection-panel" aria-label="서버 접속 설정">
+        <p class="connection-warning">첫 접속은 서버 자동 접속 시 렉이 걸릴 수 있으니 주의해주세요.</p>
         <label class="toggle">
           <input id="auto-connect" type="checkbox">
           <span class="switch"></span>
-          게임 로딩 후 서버 자동 접속
+          서버 자동 접속
         </label>
+        <span id="mc-version" hidden>-</span>
+        <span id="loader" hidden>-</span>
+        <span id="integrity" hidden>확인 전</span>
         <span id="game-dir" class="hidden-path"></span>
-      </aside>
+      </section>
 
       <section class="play-zone">
         <button id="play" class="play-button" disabled>
@@ -69,29 +54,41 @@
       </section>
 
       <nav class="quick-actions" aria-label="런처 메뉴">
-        <button id="folder" class="action-button" title="게임 폴더">
-          <span class="action-icon">▣</span>
-          <span>폴더</span>
-        </button>
-        <button id="verify" class="action-button" title="파일 검사">
-          <span class="action-icon">✓</span>
-          <span>검사</span>
-        </button>
         <button id="config" class="action-button" title="런처 설정">
           <span class="action-icon">⚙</span>
           <span>설정</span>
         </button>
         <button id="login" class="account-button" title="Microsoft 계정">
-          <span class="avatar">M</span>
+          <span id="avatar" class="avatar">M</span>
           <span id="account">로그인</span>
         </button>
       </nav>
     </section>
 
-    <details class="log-drawer">
-      <summary>상세 로그</summary>
-      <pre id="log"></pre>
-    </details>
+    <pre id="log" class="hidden-log" aria-hidden="true"></pre>
+
+    <section id="settings-modal" class="settings-modal" aria-hidden="true">
+      <div class="settings-card" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+        <div class="settings-header">
+          <div>
+            <p class="section-label">런처 설정</p>
+            <h2 id="settings-title">게임 설정</h2>
+          </div>
+          <button id="settings-close" class="modal-close" title="닫기">×</button>
+        </div>
+        <label class="setting-row" for="memory-range">
+          <span>램 할당량</span>
+          <strong id="memory-label">- GB</strong>
+        </label>
+        <input id="memory-range" class="memory-range" type="range" min="2048" max="16384" step="512">
+        <div class="memory-input-row">
+          <input id="memory-input" type="number" min="2048" step="512">
+          <span>MB</span>
+        </div>
+        <p class="settings-help">값이 높을수록 Minecraft에 더 많은 메모리를 할당합니다. PC 전체 메모리보다 너무 크게 잡지 마세요.</p>
+        <button id="settings-save" class="settings-save">저장</button>
+      </div>
+    </section>
 
     <span id="launcher-version" class="version">launcher v-</span>
   </main>

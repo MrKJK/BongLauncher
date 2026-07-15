@@ -5,6 +5,7 @@ const path = require("path");
 const crypto = require("crypto");
 const net = require("net");
 const http = require("http");
+const os = require("os");
 const { autoUpdater } = require("electron-updater");
 
 let mainWindow;
@@ -35,6 +36,26 @@ async function readJson(file, fallback = null) {
 async function writeJson(file, value) {
   await fsp.mkdir(path.dirname(file), { recursive: true });
   await fsp.writeFile(file, `${JSON.stringify(value, null, 2)}\n`, "utf8");
+}
+
+async function updateLauncherState(patch) {
+  const current = await readJson(paths.state, {});
+  const next = mergeObject(current || {}, patch);
+  await writeJson(paths.state, next);
+  return next;
+}
+
+function memoryLimitMb() {
+  const totalMb = Math.floor(os.totalmem() / 1024 / 1024);
+  return Math.max(2048, Math.min(32768, totalMb - 1024));
+}
+
+function applyLauncherState(state = {}) {
+  if (typeof state.autoConnect === "boolean") config.server.autoConnect = state.autoConnect;
+  const maxMemoryMb = Number(state.memory?.maxMemoryMb);
+  if (Number.isFinite(maxMemoryMb)) {
+    config.minecraft.maxMemoryMb = Math.max(1024, Math.min(memoryLimitMb(), Math.round(maxMemoryMb)));
+  }
 }
 
 function setupPaths() {
@@ -911,13 +932,18 @@ function registerIpc() {
   ipcMain.handle("launcher:initialize", async () => {
     await fsp.mkdir(paths.game, { recursive: true });
     const state = await readJson(paths.state, {});
-    if (typeof state.autoConnect === "boolean") config.server.autoConnect = state.autoConnect;
+    applyLauncherState(state);
     account = await loadAccount();
     return {
       config,
       appVersion: app.getVersion(),
       gameDir: paths.game,
       autoConnect: config.server.autoConnect,
+      settings: {
+        maxMemoryMb: config.minecraft.maxMemoryMb,
+        minMemoryMb: config.minecraft.minMemoryMb,
+        memoryLimitMb: memoryLimitMb()
+      },
       account: account && { id: account.id, name: account.name },
       server: await queryServer()
     };
@@ -947,8 +973,20 @@ function registerIpc() {
   ipcMain.handle("folder:config", () => shell.showItemInFolder(configPath()));
   ipcMain.handle("settings:auto-connect", async (_, enabled) => {
     config.server.autoConnect = Boolean(enabled);
-    await writeJson(paths.state, { autoConnect: config.server.autoConnect });
+    await updateLauncherState({ autoConnect: config.server.autoConnect });
     return config.server.autoConnect;
+  });
+  ipcMain.handle("settings:save", async (_, settings = {}) => {
+    const maxMemoryMb = Math.round(Number(settings.maxMemoryMb));
+    if (!Number.isFinite(maxMemoryMb)) throw new Error("램 할당량이 올바르지 않습니다.");
+    const clamped = Math.max(config.minecraft.minMemoryMb, Math.min(memoryLimitMb(), maxMemoryMb));
+    config.minecraft.maxMemoryMb = clamped;
+    await updateLauncherState({ memory: { maxMemoryMb: clamped } });
+    return {
+      maxMemoryMb: clamped,
+      minMemoryMb: config.minecraft.minMemoryMb,
+      memoryLimitMb: memoryLimitMb()
+    };
   });
 }
 
