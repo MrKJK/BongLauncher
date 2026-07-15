@@ -1,8 +1,8 @@
 const elements = Object.fromEntries(
   [
-    "account", "avatar", "server-state", "server-name", "motd", "players", "ping",
+    "account", "avatar", "avatar-image", "avatar-fallback", "server-state", "players", "ping",
     "mc-version", "loader", "game-dir", "integrity", "auto-connect", "status",
-    "progress", "log", "refresh", "config", "login", "play", "launcher-version",
+    "progress", "log", "config", "login", "play", "launcher-version",
     "settings-modal", "settings-close", "settings-save", "memory-range",
     "memory-input", "memory-label"
   ].map((id) => [id, document.getElementById(id)])
@@ -19,8 +19,8 @@ function setBusy(value, message) {
 }
 
 function skinUrl(account) {
-  return account?.id
-    ? `https://crafatar.com/avatars/${account.id}?overlay&size=64`
+  return account?.name
+    ? `https://mc-heads.net/avatar/${encodeURIComponent(account.name)}/64`
     : "";
 }
 
@@ -28,19 +28,30 @@ function renderAccount(account) {
   elements.account.textContent = account ? account.name : "로그인";
   elements.login.title = account ? "Microsoft 로그아웃" : "Microsoft 로그인";
   elements.play.disabled = busy || !account;
-  elements.avatar.classList.toggle("has-skin", Boolean(account));
-  elements.avatar.textContent = account ? "" : "M";
-  elements.avatar.style.backgroundImage = account ? `url("${skinUrl(account)}")` : "";
+  elements.avatar.classList.remove("has-skin");
+  elements["avatar-image"].hidden = true;
+  elements["avatar-image"].removeAttribute("src");
+  elements["avatar-fallback"].hidden = false;
+  elements["avatar-fallback"].textContent = account?.name?.slice(0, 1).toUpperCase() || "M";
+  if (!account) return;
+
+  elements["avatar-image"].onload = () => {
+    elements.avatar.classList.add("has-skin");
+    elements["avatar-image"].hidden = false;
+    elements["avatar-fallback"].hidden = true;
+  };
+  elements["avatar-image"].onerror = () => {
+    elements.avatar.classList.remove("has-skin");
+    elements["avatar-image"].hidden = true;
+    elements["avatar-fallback"].hidden = false;
+  };
+  elements["avatar-image"].src = skinUrl(account);
 }
 
 function renderServer(server) {
   const online = server?.online;
   elements["server-state"].className = `state ${online ? "online" : "offline"}`;
   elements["server-state"].textContent = online ? "온라인" : "오프라인";
-  elements["server-name"].textContent = server?.name || state.config.server.name;
-  elements.motd.textContent = server?.motd || (
-    online ? "서버가 온라인입니다." : "서버에 연결할 수 없습니다."
-  );
   elements.players.textContent = online
     ? `${server.players.online} / ${server.players.max}`
     : "- / -";
@@ -96,7 +107,6 @@ async function initialize() {
   state = await window.launcher.initialize();
   document.title = state.config.windowTitle;
   elements["launcher-version"].textContent = `launcher v${state.appVersion}`;
-  elements["server-name"].textContent = state.config.server.name;
   elements["mc-version"].textContent = state.config.minecraft.version;
   elements.loader.textContent = state.config.minecraft.loader.toUpperCase();
   elements["game-dir"].textContent = state.gameDir;
@@ -121,7 +131,6 @@ window.launcher.onGameLog((line) => {
   elements.log.textContent = `${line}\n${elements.log.textContent}`.slice(0, 6000);
 });
 
-elements.refresh.addEventListener("click", refreshServer);
 elements.config.addEventListener("click", openSettings);
 elements["settings-close"].addEventListener("click", closeSettings);
 elements["settings-modal"].addEventListener("click", (event) => {

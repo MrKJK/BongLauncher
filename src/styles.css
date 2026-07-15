@@ -70,8 +70,8 @@ button {
 }
 
 .server-summary {
-  max-width: 660px;
-  gap: 13px;
+  max-width: 320px;
+  gap: 14px;
   padding: 10px 12px 10px 15px;
   border: 1px solid rgba(255, 255, 255, .12);
   border-radius: 16px;
@@ -80,32 +80,9 @@ button {
   backdrop-filter: blur(14px);
 }
 
-.server-summary > div:nth-child(2) {
-  min-width: 190px;
-  flex: 1;
-}
-
 .server-summary strong,
 .server-summary span {
   display: block;
-}
-
-.server-summary > div:nth-child(2) strong {
-  max-width: 270px;
-  overflow: hidden;
-  font-size: 13px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-#motd {
-  max-width: 270px;
-  margin-top: 3px;
-  overflow: hidden;
-  color: rgba(255, 255, 255, .62);
-  font-size: 10px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .state {
@@ -168,19 +145,6 @@ button {
   font-size: 9px;
 }
 
-.round-button {
-  width: 34px;
-  height: 34px;
-  border: 1px solid rgba(255, 255, 255, .14);
-  border-radius: 50%;
-  background: rgba(255, 255, 255, .08);
-  cursor: pointer;
-}
-
-.round-button:hover {
-  background: rgba(255, 255, 255, .17);
-}
-
 .bottom-area {
   position: absolute;
   z-index: 2;
@@ -207,7 +171,7 @@ button {
 
 .connection-warning {
   max-width: 340px;
-  margin: 0 0 11px;
+  margin: 10px 0 0;
   color: rgba(255, 255, 255, .82);
   font-size: 12px;
   font-weight: 700;
@@ -377,12 +341,19 @@ progress {
   font-weight: 900;
   background-position: center;
   background-size: cover;
+  overflow: hidden;
 }
 
 .avatar.has-skin {
   border: 1px solid rgba(255, 255, 255, .22);
-  color: transparent;
   background-color: rgba(255, 255, 255, .1);
+}
+
+.avatar-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  image-rendering: pixelated;
 }
 
 .hidden-log {
@@ -507,11 +478,6 @@ progress {
 }
 
 @media (max-width: 1000px) {
-  .server-summary > div:nth-child(2),
-  .server-metric {
-    display: none;
-  }
-
   .connection-panel {
     width: 290px;
   }
