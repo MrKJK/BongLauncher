@@ -180,13 +180,13 @@ function configureAutoUpdater() {
       type: "info",
       title: "BongLauncher 업데이트",
       message: `BongLauncher ${info.version} 업데이트가 준비되었습니다.`,
-      detail: "지금 재시작하면 새 버전이 자동으로 설치됩니다.",
-      buttons: ["지금 재시작", "종료할 때 설치"],
+      detail: "설치 화면 없이 업데이트를 적용한 뒤 런처를 다시 엽니다.",
+      buttons: ["지금 업데이트", "종료할 때 업데이트"],
       defaultId: 0,
       cancelId: 1,
       noLink: true
     });
-    if (result.response === 0) autoUpdater.quitAndInstall(false, true);
+    if (result.response === 0) autoUpdater.quitAndInstall(true, true);
   });
   setTimeout(() => {
     autoUpdater.checkForUpdates().catch((error) => {
