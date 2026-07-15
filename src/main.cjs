@@ -364,6 +364,9 @@ async function exchangeMinecraftAccount(oauth) {
   const authenticator = new MicrosoftAuthenticator({});
   const xbox = await authenticator.acquireXBoxToken(oauth.access_token);
   const claim = xbox.minecraftXstsResponse.DisplayClaims.xui[0];
+  const liveClaim = xbox.liveXstsResponse.DisplayClaims.xui[0];
+  const xuid = liveClaim?.xid || claim?.xid;
+  if (!xuid) throw new Error("Xbox 사용자 식별자(XUID)를 가져오지 못했습니다.");
   const minecraftAuth = await authenticator.loginMinecraftWithXBox(
     claim.uhs,
     xbox.minecraftXstsResponse.Token
@@ -375,6 +378,7 @@ async function exchangeMinecraftAccount(oauth) {
   return {
     id: profile.id,
     name: profile.name,
+    xuid,
     accessToken: minecraftAuth.access_token,
     minecraftExpiresAt: Date.now() + minecraftAuth.expires_in * 1000,
     refreshToken: oauth.refresh_token,
@@ -384,7 +388,7 @@ async function exchangeMinecraftAccount(oauth) {
 
 async function refreshAccount() {
   if (!account?.refreshToken) throw new Error("Microsoft 로그인이 필요합니다.");
-  if (account.minecraftExpiresAt > Date.now() + 60_000) return account;
+  if (account.minecraftExpiresAt > Date.now() + 60_000 && account.xuid) return account;
   const oauth = await fetchJson("https://login.microsoftonline.com/consumers/oauth2/v2.0/token", {
     method: "POST",
     headers: { "content-type": "application/x-www-form-urlencoded" },
@@ -396,6 +400,7 @@ async function refreshAccount() {
     })
   });
   const refreshed = await exchangeMinecraftAccount(oauth);
+  if (!refreshed.refreshToken) refreshed.refreshToken = account.refreshToken;
   await saveAccount(refreshed);
   return refreshed;
 }
@@ -939,9 +944,14 @@ async function launchGame() {
     child = await core.launch({
       gameProfile: { name: account.name, id: account.id },
       accessToken: account.accessToken,
-      userType: "mojang",
       launcherName: config.launcherName,
       launcherBrand: config.launcherName,
+      features: {
+        bongLauncherAuth: {
+          clientid: config.microsoft.clientId,
+          auth_xuid: account.xuid
+        }
+      },
       version: resolvedVersion,
       gamePath: paths.game,
       resourcePath: paths.game,
