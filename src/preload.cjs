@@ -13,5 +13,6 @@ contextBridge.exposeInMainWorld("launcher", {
   setAutoConnect: (enabled) => ipcRenderer.invoke("settings:auto-connect", enabled),
   saveSettings: (settings) => ipcRenderer.invoke("settings:save", settings),
   onProgress: (callback) => ipcRenderer.on("progress", (_, value) => callback(value)),
-  onGameLog: (callback) => ipcRenderer.on("game-log", (_, value) => callback(value))
+  onGameLog: (callback) => ipcRenderer.on("game-log", (_, value) => callback(value)),
+  onGameState: (callback) => ipcRenderer.on("game-state", (_, value) => callback(value))
 });

@@ -2,7 +2,7 @@ const elements = Object.fromEntries(
   [
     "account", "avatar", "avatar-image", "avatar-fallback", "server-state", "players", "ping",
     "mc-version", "loader", "game-dir", "integrity", "auto-connect", "status",
-    "progress", "log", "config", "login", "play", "launcher-version",
+    "progress", "log", "config", "login", "play", "play-label", "launcher-version",
     "settings-modal", "settings-close", "settings-save", "memory-range",
     "memory-input", "memory-label"
   ].map((id) => [id, document.getElementById(id)])
@@ -10,10 +10,16 @@ const elements = Object.fromEntries(
 
 let state;
 let busy = false;
+let gameRunning = false;
+
+function renderPlayButton() {
+  elements["play-label"].textContent = gameRunning ? "게임 실행 중" : "게임 시작";
+  elements.play.disabled = busy || gameRunning || !state?.account;
+}
 
 function setBusy(value, message) {
   busy = value;
-  elements.play.disabled = value || !state?.account;
+  renderPlayButton();
   elements.login.disabled = value;
   if (message) elements.status.textContent = message;
 }
@@ -27,7 +33,7 @@ function skinUrl(account) {
 function renderAccount(account) {
   elements.account.textContent = account ? account.name : "로그인";
   elements.login.title = account ? "Microsoft 로그아웃" : "Microsoft 로그인";
-  elements.play.disabled = busy || !account;
+  renderPlayButton();
   elements.avatar.classList.remove("has-skin");
   elements["avatar-image"].hidden = true;
   elements["avatar-image"].removeAttribute("src");
@@ -105,6 +111,7 @@ async function refreshServer() {
 
 async function initialize() {
   state = await window.launcher.initialize();
+  gameRunning = Boolean(state.gameRunning);
   document.title = state.config.windowTitle;
   elements["launcher-version"].textContent = `launcher v${state.appVersion}`;
   elements["mc-version"].textContent = state.config.minecraft.version;
@@ -129,6 +136,12 @@ window.launcher.onProgress(({ message, percent = 0, detail = "" }) => {
 
 window.launcher.onGameLog((line) => {
   elements.log.textContent = `${line}\n${elements.log.textContent}`.slice(0, 6000);
+});
+
+window.launcher.onGameState(({ running, message = "" }) => {
+  gameRunning = Boolean(running);
+  renderPlayButton();
+  if (message) elements.status.textContent = message;
 });
 
 elements.config.addEventListener("click", openSettings);
@@ -182,11 +195,13 @@ elements.login.addEventListener("click", async () => {
 });
 
 elements.play.addEventListener("click", async () => {
+  gameRunning = true;
   setBusy(true, "설치 상태를 확인하고 있습니다...");
   try {
-    const result = await window.launcher.launch();
-    elements.status.textContent = `게임을 실행했습니다. PID ${result.pid}`;
+    await window.launcher.launch();
+    elements.status.textContent = "게임 실행 중";
   } catch (error) {
+    gameRunning = false;
     elements.status.textContent = `실행 실패: ${error.message}`;
   } finally {
     setBusy(false);

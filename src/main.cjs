@@ -13,6 +13,8 @@ let config;
 let paths;
 let account;
 let currentManifest;
+let gameStarting = false;
+let gameProcess;
 
 function configPath() {
   return app.isPackaged
@@ -22,6 +24,14 @@ function configPath() {
 
 function sendProgress(message, percent = 0, detail = "") {
   mainWindow?.webContents.send("progress", { message, percent, detail });
+}
+
+function isGameActive() {
+  return gameStarting || Boolean(gameProcess && gameProcess.exitCode === null);
+}
+
+function sendGameState(running, message = "") {
+  mainWindow?.webContents.send("game-state", { running, message });
 }
 
 async function readJson(file, fallback = null) {
@@ -892,53 +902,86 @@ async function createLaunchSession(manifest) {
 }
 
 async function launchGame() {
-  await refreshAccount();
-  const javaPath = await findOrInstallJava();
-  const manifest = await syncDistribution();
-  const verification = await verifyFiles(manifest);
-  if (!verification.valid) throw new Error(`서버 접속 차단: ${verification.problems.join(", ")}`);
-  const optionsApplied = await applyGameOptions();
-  sendProgress(
-    optionsApplied ? "새 게임 설정을 한 번 적용했습니다." : "사용자 게임 설정을 유지합니다.",
-    72
-  );
-  const installed = await readJson(path.join(paths.root, "installed-profile.json"));
-  const expectedProfile = installed
-    && installed.minecraftVersion === config.minecraft.version
-    && installed.loader === config.minecraft.loader.toLowerCase()
-    && installed.loaderVersion === config.minecraft.loaderVersion;
-  const launchVersion = expectedProfile ? installed.launchVersion : await installGame(javaPath);
-  const resolvedVersion = await ensureLaunchLibraries(launchVersion);
-  await createLaunchSession(manifest);
+  if (isGameActive()) throw new Error("Minecraft가 이미 실행 중입니다.");
+  gameStarting = true;
+  sendGameState(true, "게임 실행 중");
 
-  const { launch, createMinecraftProcessWatcher } = require("@xmcl/core");
-  sendProgress("Minecraft를 실행합니다.", 95);
-  const server = `${config.server.host}:${config.server.port}`;
-  const child = await launch({
-    gameProfile: { name: account.name, id: account.id },
-    accessToken: account.accessToken,
-    userType: "mojang",
-    launcherName: config.launcherName,
-    launcherBrand: config.launcherName,
-    version: resolvedVersion,
-    gamePath: paths.game,
-    resourcePath: paths.game,
-    javaPath,
-    minMemory: config.minecraft.minMemoryMb,
-    maxMemory: config.minecraft.maxMemoryMb,
-    quickPlayMultiplayer: config.server.autoConnect && supportsQuickPlay(config.minecraft.version)
-      ? server
-      : undefined,
-    server: config.server.autoConnect && !supportsQuickPlay(config.minecraft.version)
-      ? { ip: config.server.host, port: config.server.port }
-      : undefined,
-    extraJVMArgs: [`-Dservercraft.session=${paths.session}`]
-  });
+  let child;
+  let createMinecraftProcessWatcher;
+  try {
+    await refreshAccount();
+    const javaPath = await findOrInstallJava();
+    const manifest = await syncDistribution();
+    const verification = await verifyFiles(manifest);
+    if (!verification.valid) throw new Error(`서버 접속 차단: ${verification.problems.join(", ")}`);
+    const optionsApplied = await applyGameOptions();
+    sendProgress(
+      optionsApplied ? "새 게임 설정을 한 번 적용했습니다." : "사용자 게임 설정을 유지합니다.",
+      72
+    );
+    const installed = await readJson(path.join(paths.root, "installed-profile.json"));
+    const expectedProfile = installed
+      && installed.minecraftVersion === config.minecraft.version
+      && installed.loader === config.minecraft.loader.toLowerCase()
+      && installed.loaderVersion === config.minecraft.loaderVersion;
+    const launchVersion = expectedProfile ? installed.launchVersion : await installGame(javaPath);
+    const resolvedVersion = await ensureLaunchLibraries(launchVersion);
+    await createLaunchSession(manifest);
+
+    const core = require("@xmcl/core");
+    createMinecraftProcessWatcher = core.createMinecraftProcessWatcher;
+    sendProgress("Minecraft를 실행합니다.", 95);
+    const server = `${config.server.host}:${config.server.port}`;
+    child = await core.launch({
+      gameProfile: { name: account.name, id: account.id },
+      accessToken: account.accessToken,
+      userType: "mojang",
+      launcherName: config.launcherName,
+      launcherBrand: config.launcherName,
+      version: resolvedVersion,
+      gamePath: paths.game,
+      resourcePath: paths.game,
+      javaPath,
+      minMemory: config.minecraft.minMemoryMb,
+      maxMemory: config.minecraft.maxMemoryMb,
+      quickPlayMultiplayer: config.server.autoConnect && supportsQuickPlay(config.minecraft.version)
+        ? server
+        : undefined,
+      server: config.server.autoConnect && !supportsQuickPlay(config.minecraft.version)
+        ? { ip: config.server.host, port: config.server.port }
+        : undefined,
+      extraJVMArgs: [`-Dservercraft.session=${paths.session}`]
+    });
+  } catch (error) {
+    gameStarting = false;
+    sendGameState(false, `실행 실패: ${error.message}`);
+    throw error;
+  }
+
+  gameStarting = false;
+  gameProcess = child;
   child.stdout?.on("data", (data) => mainWindow?.webContents.send("game-log", data.toString().trim()));
   child.stderr?.on("data", (data) => mainWindow?.webContents.send("game-log", data.toString().trim()));
-  const watcher = createMinecraftProcessWatcher(child);
-  watcher.on("minecraft-window-ready", () => sendProgress("Minecraft 창이 열렸습니다.", 100));
-  watcher.on("minecraft-exit", ({ code }) => sendProgress(`Minecraft가 종료되었습니다. (코드 ${code})`, 0));
+  const finishGame = (code) => {
+    if (gameProcess !== child) return;
+    gameProcess = undefined;
+    const message = `Minecraft가 종료되었습니다. (코드 ${code ?? "-"})`;
+    sendProgress(message, 0);
+    sendGameState(false, message);
+  };
+  child.once("exit", (code) => finishGame(code));
+  try {
+    const watcher = createMinecraftProcessWatcher(child);
+    watcher.on("minecraft-window-ready", () => sendProgress("Minecraft 창이 열렸습니다.", 100));
+    watcher.on("minecraft-exit", ({ code }) => finishGame(code));
+  } catch (error) {
+    console.warn(`Minecraft process watcher failed: ${error.message}`);
+  }
+  if (child.exitCode === null) {
+    sendGameState(true, "게임 실행 중");
+  } else {
+    finishGame(child.exitCode);
+  }
   return { pid: child.pid };
 }
 
@@ -952,6 +995,7 @@ function registerIpc() {
       config,
       appVersion: app.getVersion(),
       gameDir: paths.game,
+      gameRunning: isGameActive(),
       autoConnect: config.server.autoConnect,
       settings: {
         maxMemoryMb: config.minecraft.maxMemoryMb,
