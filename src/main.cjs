@@ -35,6 +35,43 @@ function sendGameState(running, message = "") {
   mainWindow?.webContents.send("game-state", { running, message });
 }
 
+function describeError(error) {
+  const messages = [];
+  const seen = new Set();
+  const visit = (value) => {
+    if (!value || seen.has(value)) return;
+    seen.add(value);
+    const message = typeof value.message === "string" ? value.message.trim() : "";
+    if (message && message.toLowerCase() !== "aggregateerror") messages.push(message);
+    if (Array.isArray(value.errors)) value.errors.forEach(visit);
+    if (value.cause) visit(value.cause);
+  };
+  visit(error);
+  return [...new Set(messages)].slice(0, 5).join(" | ")
+    || error?.message
+    || error?.name
+    || "알 수 없는 오류";
+}
+
+async function retryOperation(label, operation, percent, attempts = 3) {
+  let lastError;
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      return await operation();
+    } catch (error) {
+      lastError = error;
+      if (attempt === attempts) break;
+      sendProgress(
+        `${label}에 실패해 다시 시도합니다. (${attempt + 1}/${attempts})`,
+        percent,
+        describeError(error)
+      );
+      await new Promise((resolve) => setTimeout(resolve, attempt * 1200));
+    }
+  }
+  throw new Error(`${label} 실패: ${describeError(lastError)}`, { cause: lastError });
+}
+
 async function readJson(file, fallback = null) {
   try {
     return JSON.parse(await fsp.readFile(file, "utf8"));
@@ -763,7 +800,11 @@ async function installGame(javaPath) {
   if (!metadata) throw new Error(`Minecraft ${version} 버전을 찾을 수 없습니다.`);
 
   sendProgress(`Minecraft ${version} 설치 상태 확인 중`, 20);
-  await installer.install(metadata, minecraft);
+  await retryOperation(
+    `Minecraft ${version} 설치`,
+    () => installer.install(metadata, minecraft),
+    20
+  );
   let launchVersion = version;
   const loader = config.minecraft.loader.toLowerCase();
   if (loader === "fabric") {
@@ -772,7 +813,11 @@ async function installGame(javaPath) {
       ? loaders.find((item) => item.loader.version === config.minecraft.loaderVersion)
       : loaders.find((item) => item.loader.stable) || loaders[0];
     if (!selected) throw new Error(`Minecraft ${version}용 Fabric Loader를 찾지 못했습니다.`);
-    launchVersion = await installer.installFabricByLoaderArtifact(selected, minecraft);
+    launchVersion = await retryOperation(
+      `Fabric Loader ${selected.loader.version} 설치`,
+      () => installer.installFabricByLoaderArtifact(selected, minecraft),
+      78
+    );
   } else if (loader === "forge") {
     const list = await installer.getForgeVersionList({ minecraft: version });
     const selected = config.minecraft.loaderVersion
@@ -818,11 +863,11 @@ async function ensureLaunchLibraries(launchVersion) {
   const { Version } = require("@xmcl/core");
   sendProgress("필수 라이브러리를 확인하고 있습니다.", 82);
   const resolvedVersion = await Version.parse(paths.game, launchVersion);
-  try {
-    await installer.installLibraries(resolvedVersion);
-  } catch (error) {
-    throw new Error(`Minecraft 필수 라이브러리 설치 실패: ${error.message}`);
-  }
+  await retryOperation(
+    "Minecraft 필수 라이브러리 설치",
+    () => installer.installLibraries(resolvedVersion),
+    82
+  );
   return resolvedVersion;
 }
 
@@ -968,8 +1013,9 @@ async function launchGame() {
     });
   } catch (error) {
     gameStarting = false;
-    sendGameState(false, `실행 실패: ${error.message}`);
-    throw error;
+    const detail = describeError(error);
+    sendGameState(false, `실행 실패: ${detail}`);
+    throw new Error(detail, { cause: error });
   }
 
   gameStarting = false;

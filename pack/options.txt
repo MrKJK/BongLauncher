@@ -51,7 +51,7 @@ damageTiltStrength:1.0
 highContrast:false
 highContrastBlockOutline:false
 narratorHotkey:true
-resourcePacks:["vanilla","fabric","continuity:glass_pane_culling_fix","continuity:default","file/봉봉리_3D.zip","file/봉봉리_애니메이션2.zip","file/봉봉리_애니메이션1.zip","file/[셰이더 유저 추천]봉봉리_하늘.zip"]
+resourcePacks:["vanilla","fabric","file/봉봉리_애니메이션2.zip","file/봉봉리_애니메이션1.zip","file/봉봉리_3D.zip","file/[셰이더 유저 추천]봉봉리_하늘.zip"]
 incompatibleResourcePacks:["enchdesc","entity_model_features","entity_texture_features","koreanpatch","modernfix","yet_another_config_lib_v3"]
 lastServer:
 lang:ko_kr
@@ -123,34 +123,14 @@ key_key.hotbar.6:key.keyboard.6
 key_key.hotbar.7:key.keyboard.7
 key_key.hotbar.8:key.keyboard.8
 key_key.hotbar.9:key.keyboard.9
+key_key.dynamic_fps.toggle_forced:key.keyboard.unknown
+key_key.dynamic_fps.toggle_disabled:key.keyboard.unknown
 key_Show Cape Selection Screen:key.keyboard.p
 key_Show Custom Cape Selection Screen:key.keyboard.unknown
 key_key.emotecraft.fastchoose:key.keyboard.c
 key_key.emotecraft.stop:key.keyboard.unknown
 key_key.entityculling.toggle:key.keyboard.unknown
 key_key.entityculling.toggleBoxes:key.keyboard.unknown
-key_key.journeymap.zoom_in:key.keyboard.equal
-key_key.journeymap.zoom_out:key.keyboard.minus
-key_key.journeymap.minimap_type:key.keyboard.unknown
-key_key.journeymap.minimap_preset:key.keyboard.unknown
-key_key.journeymap.create_waypoint:key.keyboard.b
-key_key.journeymap.toggle_render_waypoints:key.keyboard.unknown
-key_key.journeymap.toggle_render_waypoints_world:key.keyboard.unknown
-key_key.journeymap.toggle_render_waypoints_map:key.keyboard.unknown
-key_key.journeymap.toggle_waypoints:key.keyboard.unknown
-key_key.journeymap.fullscreen_create_waypoint:key.keyboard.unknown
-key_key.journeymap.fullscreen_chat_position:key.keyboard.unknown
-key_key.journeymap.map_toggle_alt:key.keyboard.x
-key_key.journeymap.fullscreen_waypoints:key.keyboard.unknown
-key_key.journeymap.minimap_toggle_alt:key.keyboard.unknown
-key_key.journeymap.fullscreen_options:key.keyboard.o
-key_key.journeymap.fullscreen.north:key.keyboard.up
-key_key.journeymap.fullscreen.south:key.keyboard.down
-key_key.journeymap.fullscreen.east:key.keyboard.right
-key_key.journeymap.fullscreen.west:key.keyboard.left
-key_key.journeymap.fullscreen_follow_player:key.keyboard.unknown
-key_key.journeymap.fullscreen.disable_buttons:key.keyboard.unknown
-key_key.journeymap.toggle_entity_names:key.keyboard.unknown
 key_key.koreanpatch.toggle_langtype:key.keyboard.right.alt
 key_key.koreanpatch.toggle_ime:key.keyboard.unknown
 key_key.modmenu.open_menu:key.keyboard.unknown
@@ -174,13 +154,13 @@ key_iris.keybind.shaderPackSelection:key.keyboard.unknown
 key_iris.keybind.wireframe:key.keyboard.unknown
 soundCategory_master:1.0
 soundCategory_music:0.0
-soundCategory_record:0.5052816901408451
+soundCategory_record:0.4037558685446008
 soundCategory_weather:0.1009389671361503
 soundCategory_block:1.0
 soundCategory_hostile:0.5
 soundCategory_neutral:0.5093896713615023
-soundCategory_player:0.5017605633802817
-soundCategory_ambient:0.1073943661971831
+soundCategory_player:0.3028169014084507
+soundCategory_ambient:0.20892018779342736
 soundCategory_voice:1.0
 modelPart_cape:true
 modelPart_jacket:true
