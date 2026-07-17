@@ -4,14 +4,10 @@ const {
   deserialize,
   serialize,
   getPrototypeOf,
-  setPrototypeOf,
-  kNBTConstructor,
   TagType
 } = require("@xmcl/nbt");
 
-const createNbtObject = () => ({});
 const requiredEntrySchema = {
-  [kNBTConstructor]: createNbtObject,
   hidden: TagType.Byte,
   ip: TagType.String,
   name: TagType.String,
@@ -23,52 +19,44 @@ function formatServerAddress(host, port) {
   return Number(port) === 25565 ? host : `${host}:${port}`;
 }
 
-function mergeEntrySchema(entries) {
-  let schema = requiredEntrySchema;
-  for (const entry of entries) {
-    const existing = getPrototypeOf(entry);
-    if (!existing) continue;
-    schema = {
-      ...schema,
-      ...existing,
-      ...requiredEntrySchema,
-      [kNBTConstructor]: existing[kNBTConstructor] || schema[kNBTConstructor] || createNbtObject
-    };
+async function createServerListType(fileData) {
+  const discoveredSchema = {};
+  if (fileData) {
+    const raw = await deserialize(fileData);
+    for (const entry of Array.isArray(raw.servers) ? raw.servers : []) {
+      Object.assign(discoveredSchema, getPrototypeOf(entry) || {});
+    }
   }
-  return schema;
-}
 
-function applyNbtPrototype(value, schema) {
-  const existing = getPrototypeOf(value);
-  if (existing) {
-    Object.assign(existing, schema);
-    return existing;
+  class ServerEntry {}
+  for (const [key, type] of Object.entries({ ...discoveredSchema, ...requiredEntrySchema })) {
+    TagType(type)(ServerEntry.prototype, key);
   }
-  setPrototypeOf(value, schema);
-  return schema;
+  class ServerList {
+    constructor() {
+      this.servers = [];
+    }
+  }
+  TagType([ServerEntry])(ServerList.prototype, "servers");
+  return ServerList;
 }
 
 async function updateServerResourcePackFile(file, server) {
-  let serverList;
+  let fileData;
   try {
-    serverList = await deserialize(await fsp.readFile(file));
+    fileData = await fsp.readFile(file);
   } catch (error) {
     if (error.code !== "ENOENT") throw error;
-    serverList = { servers: [] };
   }
+  const ServerList = await createServerListType(fileData);
+  const serverList = fileData
+    ? await deserialize(fileData, { type: ServerList })
+    : new ServerList();
   if (!Array.isArray(serverList.servers)) {
     throw new Error("servers.dat의 servers 목록이 올바르지 않습니다.");
   }
 
   const entries = serverList.servers;
-  const entrySchema = mergeEntrySchema(entries);
-  const existingRootSchema = getPrototypeOf(serverList) || {};
-  applyNbtPrototype(serverList, {
-    ...existingRootSchema,
-    servers: entrySchema,
-    [kNBTConstructor]: existingRootSchema[kNBTConstructor] || createNbtObject
-  });
-  entries.forEach((entry) => applyNbtPrototype(entry, entrySchema));
 
   const host = String(server.host).trim();
   const port = Number(server.port) || 25565;
@@ -90,7 +78,6 @@ async function updateServerResourcePackFile(file, server) {
       icon: "",
       acceptTextures: 1
     };
-    applyNbtPrototype(entry, entrySchema);
     entries.push(entry);
     changed = true;
   } else {
@@ -106,7 +93,9 @@ async function updateServerResourcePackFile(file, server) {
       changed = true;
     }
     if (matches.length > 1) {
-      serverList.servers = entries.filter((entry) => entry === canonical || !matches.includes(entry));
+      for (let index = entries.length - 1; index >= 0; index -= 1) {
+        if (entries[index] !== canonical && matches.includes(entries[index])) entries.splice(index, 1);
+      }
       changed = true;
     }
   }
