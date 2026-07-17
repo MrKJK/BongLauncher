@@ -15,7 +15,7 @@ prioritizeChunkUpdates:0
 fullscreen:true
 gamma:1.0
 graphicsMode:1
-guiScale:3
+guiScale:0
 maxFps:150
 inactivityFpsLimit:"afk"
 mipmapLevels:4
@@ -154,7 +154,7 @@ key_iris.keybind.shaderPackSelection:key.keyboard.unknown
 key_iris.keybind.wireframe:key.keyboard.unknown
 soundCategory_master:1.0
 soundCategory_music:0.0
-soundCategory_record:0.10516431924882614
+soundCategory_record:0.5
 soundCategory_weather:0.1009389671361503
 soundCategory_block:1.0
 soundCategory_hostile:0.5
