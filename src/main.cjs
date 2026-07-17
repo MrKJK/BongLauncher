@@ -795,7 +795,11 @@ async function installGame(javaPath) {
   const installer = require("@xmcl/installer");
   const minecraft = paths.game;
   const version = config.minecraft.version;
-  const versions = await installer.getVersionList();
+  const versions = await retryOperation(
+    "Minecraft 버전 정보 확인",
+    () => installer.getVersionList(),
+    18
+  );
   const metadata = versions.versions.find((item) => item.id === version);
   if (!metadata) throw new Error(`Minecraft ${version} 버전을 찾을 수 없습니다.`);
 
@@ -808,7 +812,11 @@ async function installGame(javaPath) {
   let launchVersion = version;
   const loader = config.minecraft.loader.toLowerCase();
   if (loader === "fabric") {
-    const loaders = await installer.getLoaderArtifactListFor(version);
+    const loaders = await retryOperation(
+      "Fabric Loader 정보 확인",
+      () => installer.getLoaderArtifactListFor(version),
+      76
+    );
     const selected = config.minecraft.loaderVersion
       ? loaders.find((item) => item.loader.version === config.minecraft.loaderVersion)
       : loaders.find((item) => item.loader.stable) || loaders[0];
@@ -819,32 +827,52 @@ async function installGame(javaPath) {
       78
     );
   } else if (loader === "forge") {
-    const list = await installer.getForgeVersionList({ minecraft: version });
+    const list = await retryOperation(
+      "Forge 버전 정보 확인",
+      () => installer.getForgeVersionList({ minecraft: version }),
+      76
+    );
     const selected = config.minecraft.loaderVersion
       ? list.versions.find((item) => item.version === config.minecraft.loaderVersion)
       : list.versions.find((item) => item.type === "recommended")
         || list.versions.find((item) => item.type === "latest")
         || list.versions[0];
     if (!selected) throw new Error(`Minecraft ${version}용 Forge를 찾지 못했습니다.`);
-    launchVersion = await installer.installForge(selected, minecraft, { java: javaPath });
+    launchVersion = await retryOperation(
+      `Forge ${selected.version} 설치`,
+      () => installer.installForge(selected, minecraft, { java: javaPath }),
+      78
+    );
   } else if (loader === "quilt") {
-    const loaders = await installer.getQuiltLoaderVersionsByMinecraft({ minecraftVersion: version });
+    const loaders = await retryOperation(
+      "Quilt Loader 정보 확인",
+      () => installer.getQuiltLoaderVersionsByMinecraft({ minecraftVersion: version }),
+      76
+    );
     const selected = config.minecraft.loaderVersion
       ? loaders.find((item) => item.loader.version === config.minecraft.loaderVersion)
       : loaders[0];
     if (!selected) throw new Error(`Minecraft ${version}용 Quilt Loader를 찾지 못했습니다.`);
-    launchVersion = await installer.installQuiltVersion({
-      minecraftVersion: version,
-      version: selected.loader.version,
-      minecraft
-    });
+    launchVersion = await retryOperation(
+      `Quilt Loader ${selected.loader.version} 설치`,
+      () => installer.installQuiltVersion({
+        minecraftVersion: version,
+        version: selected.loader.version,
+        minecraft
+      }),
+      78
+    );
   } else if (loader === "neoforge") {
     if (!config.minecraft.loaderVersion) throw new Error("NeoForge는 launcher-config.json의 loaderVersion이 필요합니다.");
-    launchVersion = await installer.installNeoForged(
-      "neoforge",
-      config.minecraft.loaderVersion,
-      minecraft,
-      { java: javaPath }
+    launchVersion = await retryOperation(
+      `NeoForge ${config.minecraft.loaderVersion} 설치`,
+      () => installer.installNeoForged(
+        "neoforge",
+        config.minecraft.loaderVersion,
+        minecraft,
+        { java: javaPath }
+      ),
+      78
     );
   } else if (loader !== "vanilla") {
     throw new Error(`지원하지 않는 모드 로더: ${config.minecraft.loader}`);
