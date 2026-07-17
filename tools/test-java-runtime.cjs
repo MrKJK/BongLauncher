@@ -9,6 +9,7 @@ const {
   installTemurinRuntime,
   manifestJavaCandidates,
   parseJavaMajor,
+  runtimeFingerprint,
   temurinMetadataUrl
 } = require("../src/java-runtime.cjs");
 
@@ -51,6 +52,19 @@ async function main() {
     assert.equal(parseJavaMajor('openjdk version "21.0.11" 2026-04-21 LTS'), 21);
     assert.equal(parseJavaMajor('java version "1.8.0_401"'), 8);
     assert.match(temurinMetadataUrl(21, "arm64"), /architecture=aarch64/);
+
+    const home = path.join(root, "runtime-home");
+    const runtimeJava = path.join(home, "bin", process.platform === "win32" ? "javaw.exe" : "java");
+    await fsp.mkdir(path.join(home, "bin"), { recursive: true });
+    await fsp.mkdir(path.join(home, "lib"), { recursive: true });
+    await fsp.writeFile(runtimeJava, Buffer.alloc(2048, 1));
+    await fsp.writeFile(path.join(home, "release"), 'JAVA_VERSION="21"');
+    await fsp.writeFile(path.join(home, "lib", "tzdb.dat"), Buffer.alloc(2048, 2));
+    await fsp.writeFile(path.join(home, "lib", "modules"), Buffer.alloc(2048, 3));
+    const fingerprint = await runtimeFingerprint(runtimeJava);
+    assert.equal(fingerprint.length, 64);
+    await fsp.writeFile(path.join(home, "lib", "tzdb.dat"), Buffer.alloc(2048, 4));
+    assert.notEqual(await runtimeFingerprint(runtimeJava), fingerprint);
 
     const archiveBytes = Buffer.from("temurin-test-archive");
     const checksum = crypto.createHash("sha256").update(archiveBytes).digest("hex");

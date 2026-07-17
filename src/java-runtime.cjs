@@ -92,6 +92,25 @@ async function probeJava(executable) {
   return { path: executable, majorVersion };
 }
 
+async function runtimeFingerprint(javaPath) {
+  const home = path.dirname(path.dirname(path.resolve(javaPath)));
+  const releaseFile = path.join(home, "release");
+  const timezoneFile = path.join(home, "lib", "tzdb.dat");
+  const modulesFile = path.join(home, "lib", "modules");
+  const javaStat = await fsp.stat(javaPath);
+  const timezoneStat = await fsp.stat(timezoneFile);
+  const modulesStat = await fsp.stat(modulesFile);
+  if (!javaStat.isFile() || javaStat.size < 1024) throw new Error("Java 실행 파일이 손상되었습니다.");
+  if (!timezoneStat.isFile() || timezoneStat.size < 1024) throw new Error("Java 시간대 데이터가 손상되었습니다.");
+  if (!modulesStat.isFile() || modulesStat.size < 1024) throw new Error("Java 모듈 데이터가 손상되었습니다.");
+
+  const hash = crypto.createHash("sha256");
+  hash.update(await fsp.readFile(releaseFile));
+  hash.update(await fsp.readFile(timezoneFile));
+  hash.update(`${javaStat.size}:${modulesStat.size}`);
+  return hash.digest("hex");
+}
+
 async function applyRuntimeExecutablePermissions(root, platform, manifest) {
   if (platform === "win32") return;
   for (const [relative, entry] of Object.entries(manifest?.files || {})) {
@@ -176,5 +195,6 @@ module.exports = {
   manifestJavaCandidates,
   parseJavaMajor,
   probeJava,
+  runtimeFingerprint,
   temurinMetadataUrl
 };

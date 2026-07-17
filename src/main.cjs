@@ -12,8 +12,11 @@ const {
   applyRuntimeExecutablePermissions,
   findRuntimeJava,
   installTemurinRuntime,
-  probeJava
+  probeJava,
+  runtimeFingerprint
 } = require("./java-runtime.cjs");
+
+const RUNTIME_INTEGRITY_REVISION = 2;
 
 const platformAppData = process.platform === "darwin"
   ? path.join(os.homedir(), "Library", "Application Support")
@@ -160,6 +163,10 @@ function summarizeGameFailure(text) {
   const normalized = String(text || "");
   const rules = [
     {
+      pattern: /(?:ExceptionInInitializerError[\s\S]{0,2000}EOFException|EOFException[\s\S]{0,2000}(?:ZoneInfoFile|tzdb))/i,
+      message: "Java 런타임 파일이 손상되었습니다. 최신 런처가 다음 실행에서 Java를 자동 복구합니다."
+    },
+    {
       pattern: /OutOfMemoryError|Could not reserve enough space|Could not allocate|insufficient memory/i,
       message: "메모리가 부족합니다. 런처 설정에서 램 할당량을 낮추고 다른 프로그램을 종료해 주세요."
     },
@@ -279,6 +286,7 @@ function setupPaths() {
     root,
     game: path.join(root, "game"),
     runtime: path.join(root, "runtime"),
+    runtimeState: path.join(root, "runtime-state.json"),
     state: path.join(root, "launcher-state.json"),
     account: path.join(root, "account.bin"),
     manifest: path.join(root, "manifest.json"),
@@ -926,9 +934,24 @@ async function findOrInstallJava() {
     majorVersion: config.minecraft.javaMajor,
     resolveJava: probeJava
   });
-  if (bundled) return bundled;
+  const runtimeState = await readJson(paths.runtimeState, {});
+  if (bundled) {
+    try {
+      const fingerprint = await runtimeFingerprint(bundled);
+      const stateMatches = runtimeState.revision === RUNTIME_INTEGRITY_REVISION
+        && runtimeState.javaMajor === config.minecraft.javaMajor
+        && runtimeState.platform === process.platform
+        && runtimeState.arch === process.arch
+        && runtimeState.fingerprint === fingerprint;
+      if (stateMatches) return bundled;
+      appendLauncherLog("WARN", "Java runtime integrity state is missing or outdated; reinstalling");
+    } catch (error) {
+      appendLauncherLog("WARN", "Java runtime integrity check failed; reinstalling", error);
+    }
+  }
 
-  sendProgress(`Java ${config.minecraft.javaMajor}을(를) 설치하고 있습니다.`, 5);
+  sendProgress(`Java ${config.minecraft.javaMajor} 파일을 복구하고 있습니다.`, 5);
+  await fsp.rm(paths.runtimeState, { force: true });
   let mojangFailure;
   try {
     const targets = [
@@ -972,6 +995,15 @@ async function findOrInstallJava() {
       manifest
     });
     if (!installed) throw new Error("Mojang Java 설치 후 실행 검증에 실패했습니다.");
+    await writeJson(paths.runtimeState, {
+      revision: RUNTIME_INTEGRITY_REVISION,
+      javaMajor: config.minecraft.javaMajor,
+      platform: process.platform,
+      arch: process.arch,
+      source: "mojang",
+      fingerprint: await runtimeFingerprint(installed),
+      installedAt: new Date().toISOString()
+    });
     return installed;
   } catch (error) {
     mojangFailure = error;
@@ -998,6 +1030,15 @@ async function findOrInstallJava() {
       resolveJava: probeJava
     });
     if (!installed) throw new Error("Temurin Java 설치 후 실행 검증에 실패했습니다.");
+    await writeJson(paths.runtimeState, {
+      revision: RUNTIME_INTEGRITY_REVISION,
+      javaMajor: config.minecraft.javaMajor,
+      platform: process.platform,
+      arch: process.arch,
+      source: "temurin",
+      fingerprint: await runtimeFingerprint(installed),
+      installedAt: new Date().toISOString()
+    });
     return installed;
   } catch (temurinFailure) {
     throw new Error(
