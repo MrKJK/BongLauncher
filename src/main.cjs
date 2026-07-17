@@ -8,7 +8,12 @@ const http = require("http");
 const os = require("os");
 const { autoUpdater } = require("electron-updater");
 const { formatServerAddress, updateServerResourcePackFile } = require("./server-list.cjs");
-const { applyRuntimeExecutablePermissions, findRuntimeJava } = require("./java-runtime.cjs");
+const {
+  applyRuntimeExecutablePermissions,
+  findRuntimeJava,
+  installTemurinRuntime,
+  probeJava
+} = require("./java-runtime.cjs");
 
 let mainWindow;
 let config;
@@ -752,58 +757,91 @@ async function syncDistribution() {
 }
 
 async function findOrInstallJava() {
-  const { resolveJava, fetchJavaRuntimeManifest, installJavaRuntimeTask } = require("@xmcl/installer");
+  const { fetchJavaRuntimeManifest, installJavaRuntimeTask } = require("@xmcl/installer");
   const bundled = await findRuntimeJava({
     root: paths.runtime,
     platform: process.platform,
     majorVersion: config.minecraft.javaMajor,
-    resolveJava
+    resolveJava: probeJava
   });
   if (bundled) return bundled;
 
   sendProgress(`Java ${config.minecraft.javaMajor}을(를) 설치하고 있습니다.`, 5);
-  const targets = [
-    "java-runtime-delta",
-    "java-runtime-gamma",
-    "java-runtime-beta",
-    "java-runtime-alpha",
-    "jre-legacy",
-    "minecraft-java-exe"
-  ];
-  let manifest;
-  for (const target of targets) {
-    try {
-      const candidate = await fetchJavaRuntimeManifest({ target });
-      const major = Number.parseInt(candidate.version?.name, 10);
-      if (major === config.minecraft.javaMajor) {
-        manifest = candidate;
-        break;
+  let mojangFailure;
+  try {
+    const targets = [
+      "java-runtime-delta",
+      "java-runtime-gamma",
+      "java-runtime-beta",
+      "java-runtime-alpha",
+      "jre-legacy",
+      "minecraft-java-exe"
+    ];
+    let manifest;
+    for (const target of targets) {
+      try {
+        const candidate = await fetchJavaRuntimeManifest({ target });
+        const major = Number.parseInt(candidate.version?.name, 10);
+        if (major === config.minecraft.javaMajor) {
+          manifest = candidate;
+          break;
+        }
+      } catch {
+        // Mojang does not publish every target for every platform.
       }
-    } catch {
-      // Mojang does not publish every target for every platform.
     }
-  }
-  if (!manifest) {
-    throw new Error(`Mojang에서 Java ${config.minecraft.javaMajor} 런타임을 찾지 못했습니다.`);
-  }
-  await fsp.rm(paths.runtime, { recursive: true, force: true });
-  const task = installJavaRuntimeTask({ destination: paths.runtime, manifest });
-  await task.startAndWait({
-    onUpdate() {
-      const percent = task.total > 0 ? Math.round((task.progress / task.total) * 15) : 8;
-      sendProgress(`Java ${config.minecraft.javaMajor} 설치 중`, percent);
+    if (!manifest) {
+      throw new Error(`Mojang에서 Java ${config.minecraft.javaMajor} 런타임을 찾지 못했습니다.`);
     }
-  });
-  await applyRuntimeExecutablePermissions(paths.runtime, process.platform, manifest);
-  const installed = await findRuntimeJava({
-    root: paths.runtime,
-    platform: process.platform,
-    majorVersion: config.minecraft.javaMajor,
-    resolveJava,
-    manifest
-  });
-  if (!installed) throw new Error("Java 자동 설치 후 실행 가능한 Java 경로를 찾지 못했습니다.");
-  return installed;
+    await fsp.rm(paths.runtime, { recursive: true, force: true });
+    const task = installJavaRuntimeTask({ destination: paths.runtime, manifest });
+    await task.startAndWait({
+      onUpdate() {
+        const percent = task.total > 0 ? Math.round((task.progress / task.total) * 15) : 8;
+        sendProgress(`Mojang Java ${config.minecraft.javaMajor} 설치 중`, percent);
+      }
+    });
+    await applyRuntimeExecutablePermissions(paths.runtime, process.platform, manifest);
+    const installed = await findRuntimeJava({
+      root: paths.runtime,
+      platform: process.platform,
+      majorVersion: config.minecraft.javaMajor,
+      resolveJava: probeJava,
+      manifest
+    });
+    if (!installed) throw new Error("Mojang Java 설치 후 실행 검증에 실패했습니다.");
+    return installed;
+  } catch (error) {
+    mojangFailure = error;
+  }
+
+  if (process.platform !== "darwin") throw mojangFailure;
+  try {
+    sendProgress(`Temurin Java ${config.minecraft.javaMajor} 대체 설치를 시작합니다.`, 5);
+    await installTemurinRuntime({
+      root: paths.runtime,
+      majorVersion: config.minecraft.javaMajor,
+      arch: process.arch,
+      onProgress(percent) {
+        sendProgress(
+          `Temurin Java ${config.minecraft.javaMajor} 설치 중`,
+          5 + Math.round(percent * 0.15)
+        );
+      }
+    });
+    const installed = await findRuntimeJava({
+      root: paths.runtime,
+      platform: process.platform,
+      majorVersion: config.minecraft.javaMajor,
+      resolveJava: probeJava
+    });
+    if (!installed) throw new Error("Temurin Java 설치 후 실행 검증에 실패했습니다.");
+    return installed;
+  } catch (temurinFailure) {
+    throw new Error(
+      `macOS Java 자동 설치 실패 - Mojang: ${describeError(mojangFailure)} / Temurin: ${describeError(temurinFailure)}`
+    );
+  }
 }
 
 async function installGame(javaPath) {
