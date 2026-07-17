@@ -178,6 +178,9 @@ npm.cmd run manifest -- pack manifest.json https://cdn.example.com/servercraft/f
 
 ## 설치 파일 만들기
 
+macOS에서는 Mojang 런타임의 `jre.bundle/Contents/Home/bin/java` 구조를 자동으로
+탐색하고 manifest에 지정된 실행 파일 권한을 설치 후 복구합니다.
+
 ```powershell
 npm.cmd run build
 ```

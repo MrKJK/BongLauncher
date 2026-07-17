@@ -8,6 +8,7 @@ const http = require("http");
 const os = require("os");
 const { autoUpdater } = require("electron-updater");
 const { formatServerAddress, updateServerResourcePackFile } = require("./server-list.cjs");
+const { applyRuntimeExecutablePermissions, findRuntimeJava } = require("./java-runtime.cjs");
 
 let mainWindow;
 let config;
@@ -751,11 +752,14 @@ async function syncDistribution() {
 }
 
 async function findOrInstallJava() {
-  const executable = process.platform === "win32" ? "javaw.exe" : "java";
-  const bundled = path.join(paths.runtime, "bin", executable);
   const { resolveJava, fetchJavaRuntimeManifest, installJavaRuntimeTask } = require("@xmcl/installer");
-  const bundledInfo = await resolveJava(bundled);
-  if (bundledInfo?.majorVersion === config.minecraft.javaMajor) return bundled;
+  const bundled = await findRuntimeJava({
+    root: paths.runtime,
+    platform: process.platform,
+    majorVersion: config.minecraft.javaMajor,
+    resolveJava
+  });
+  if (bundled) return bundled;
 
   sendProgress(`Java ${config.minecraft.javaMajor}을(를) 설치하고 있습니다.`, 5);
   const targets = [
@@ -790,9 +794,16 @@ async function findOrInstallJava() {
       sendProgress(`Java ${config.minecraft.javaMajor} 설치 중`, percent);
     }
   });
-  const installed = await resolveJava(bundled);
-  if (!installed) throw new Error("Java 자동 설치 후 실행 파일을 찾지 못했습니다.");
-  return bundled;
+  await applyRuntimeExecutablePermissions(paths.runtime, process.platform, manifest);
+  const installed = await findRuntimeJava({
+    root: paths.runtime,
+    platform: process.platform,
+    majorVersion: config.minecraft.javaMajor,
+    resolveJava,
+    manifest
+  });
+  if (!installed) throw new Error("Java 자동 설치 후 실행 가능한 Java 경로를 찾지 못했습니다.");
+  return installed;
 }
 
 async function installGame(javaPath) {
