@@ -54,7 +54,8 @@ npm.cmd start
     "name": "서버 이름",
     "host": "play.example.com",
     "port": 25565,
-    "autoConnect": true
+    "autoConnect": true,
+    "acceptResourcePacks": true
   },
   "minecraft": {
     "version": "1.21.5",
@@ -165,6 +166,11 @@ npm.cmd run manifest -- pack manifest.json https://cdn.example.com/servercraft/f
 `keyBindings` 중 하나라도 원격 설정에서 바뀌면 새로운 설정으로 인식합니다.
 업데이트 후 첫 실행에 한 번 적용된 뒤에는 사용자가 `options.txt`를 수정해도
 다음 실행에서 초기화되지 않습니다.
+
+설정 화면의 `서버 리소스팩 자동 적용`을 켜면 게임 실행 전에 해당 서버의
+`servers.dat` 항목을 리소스팩 허용 상태로 갱신합니다. 서버에서도
+`server.properties`의 `resource-pack`과 `resource-pack-sha1`을 올바르게 설정해야
+실제 리소스팩이 전송됩니다.
 
 `options.txt`는 `onceFiles`에 포함되어 있으므로 모드팩 manifest가 변경된 첫 실행에만
 배포본을 적용하고 이후 사용자 수정을 유지합니다. `onceFiles`는 `ignoredFiles`보다

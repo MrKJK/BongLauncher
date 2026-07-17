@@ -1,12 +1,12 @@
 {
   "name": "bonglauncher",
-  "version": "0.2.15",
+  "version": "0.2.16",
   "description": "Minecraft server-specific launcher with Microsoft login, modpack sync, integrity checks, and server status.",
   "main": "src/main.cjs",
   "type": "commonjs",
   "scripts": {
     "start": "electron .",
-    "check": "node --check src/main.cjs && node --check src/preload.cjs && node --check src/renderer.js",
+    "check": "node --check src/main.cjs && node --check src/server-list.cjs && node --check src/preload.cjs && node --check src/renderer.js",
     "build": "electron-builder --win nsis portable --publish never",
     "build:release": "electron-builder --win nsis portable --publish never",
     "build:mac": "electron-builder --mac dmg zip --universal --publish never",
@@ -63,6 +63,7 @@
   "dependencies": {
     "@xmcl/core": "^2.15.1",
     "@xmcl/installer": "^6.1.0",
+    "@xmcl/nbt": "^3.0.2",
     "@xmcl/user": "^4.0.0",
     "electron-updater": "^6.6.2",
     "extract-zip": "^2.0.1",

@@ -7,6 +7,7 @@ const net = require("net");
 const http = require("http");
 const os = require("os");
 const { autoUpdater } = require("electron-updater");
+const { formatServerAddress, updateServerResourcePackFile } = require("./server-list.cjs");
 
 let mainWindow;
 let config;
@@ -100,6 +101,9 @@ function memoryLimitMb() {
 
 function applyLauncherState(state = {}) {
   if (typeof state.autoConnect === "boolean") config.server.autoConnect = state.autoConnect;
+  if (typeof state.server?.acceptResourcePacks === "boolean") {
+    config.server.acceptResourcePacks = state.server.acceptResourcePacks;
+  }
   const maxMemoryMb = Number(state.memory?.maxMemoryMb);
   if (Number.isFinite(maxMemoryMb)) {
     config.minecraft.maxMemoryMb = Math.max(1024, Math.min(memoryLimitMb(), Math.round(maxMemoryMb)));
@@ -943,6 +947,18 @@ async function applyGameOptions() {
   return true;
 }
 
+async function applyServerResourcePackPolicy() {
+  if (config.server.acceptResourcePacks === false) return false;
+  try {
+    return await updateServerResourcePackFile(
+      path.join(paths.game, "servers.dat"),
+      config.server
+    );
+  } catch (error) {
+    throw new Error(`servers.dat 갱신 실패: ${describeError(error)}`, { cause: error });
+  }
+}
+
 function manifestDigest(manifest) {
   const normalized = [...manifest.files]
     .map((item) => `${normalizeRelative(item.path)}:${item.sha256 || ""}`)
@@ -1008,12 +1024,14 @@ async function launchGame() {
       && installed.loaderVersion === config.minecraft.loaderVersion;
     const launchVersion = expectedProfile ? installed.launchVersion : await installGame(javaPath);
     const resolvedVersion = await ensureLaunchLibraries(launchVersion);
+    sendProgress("서버 리소스팩 설정을 확인하고 있습니다.", 88);
+    await applyServerResourcePackPolicy();
     await createLaunchSession(manifest);
 
     const core = require("@xmcl/core");
     createMinecraftProcessWatcher = core.createMinecraftProcessWatcher;
     sendProgress("Minecraft를 실행합니다.", 95);
-    const server = `${config.server.host}:${config.server.port}`;
+    const server = formatServerAddress(config.server.host, config.server.port);
     child = await core.launch({
       gameProfile: { name: account.name, id: account.id },
       accessToken: account.accessToken,
@@ -1088,7 +1106,8 @@ function registerIpc() {
       settings: {
         maxMemoryMb: config.minecraft.maxMemoryMb,
         minMemoryMb: config.minecraft.minMemoryMb,
-        memoryLimitMb: memoryLimitMb()
+        memoryLimitMb: memoryLimitMb(),
+        acceptServerResourcePacks: config.server.acceptResourcePacks !== false
       },
       account: account && { id: account.id, name: account.name },
       server: await queryServer()
@@ -1126,12 +1145,20 @@ function registerIpc() {
     const maxMemoryMb = Math.round(Number(settings.maxMemoryMb));
     if (!Number.isFinite(maxMemoryMb)) throw new Error("램 할당량이 올바르지 않습니다.");
     const clamped = Math.max(config.minecraft.minMemoryMb, Math.min(memoryLimitMb(), maxMemoryMb));
+    const acceptServerResourcePacks = typeof settings.acceptServerResourcePacks === "boolean"
+      ? settings.acceptServerResourcePacks
+      : config.server.acceptResourcePacks !== false;
     config.minecraft.maxMemoryMb = clamped;
-    await updateLauncherState({ memory: { maxMemoryMb: clamped } });
+    config.server.acceptResourcePacks = acceptServerResourcePacks;
+    await updateLauncherState({
+      memory: { maxMemoryMb: clamped },
+      server: { acceptResourcePacks: acceptServerResourcePacks }
+    });
     return {
       maxMemoryMb: clamped,
       minMemoryMb: config.minecraft.minMemoryMb,
-      memoryLimitMb: memoryLimitMb()
+      memoryLimitMb: memoryLimitMb(),
+      acceptServerResourcePacks
     };
   });
 }

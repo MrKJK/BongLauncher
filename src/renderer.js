@@ -4,7 +4,7 @@ const elements = Object.fromEntries(
     "mc-version", "loader", "game-dir", "integrity", "auto-connect", "status",
     "progress", "log", "config", "login", "play", "play-label", "launcher-version",
     "settings-modal", "settings-close", "settings-save", "memory-range",
-    "memory-input", "memory-label"
+    "memory-input", "memory-label", "server-resource-packs"
   ].map((id) => [id, document.getElementById(id)])
 );
 
@@ -88,6 +88,7 @@ function renderSettings(settings) {
   elements["memory-range"].max = max;
   elements["memory-input"].min = min;
   elements["memory-input"].max = max;
+  elements["server-resource-packs"].checked = settings?.acceptServerResourcePacks !== false;
   setMemoryValue(value);
 }
 
@@ -159,12 +160,13 @@ elements["settings-save"].addEventListener("click", async () => {
   elements["settings-save"].disabled = true;
   try {
     state.settings = await window.launcher.saveSettings({
-      maxMemoryMb: Number(elements["memory-input"].value)
+      maxMemoryMb: Number(elements["memory-input"].value),
+      acceptServerResourcePacks: elements["server-resource-packs"].checked
     });
     state.config.minecraft.maxMemoryMb = state.settings.maxMemoryMb;
     renderSettings(state.settings);
     closeSettings();
-    elements.status.textContent = `램 할당량을 ${formatMemory(state.settings.maxMemoryMb)}로 저장했습니다.`;
+    elements.status.textContent = "게임 설정을 저장했습니다.";
   } catch (error) {
     elements.status.textContent = `설정 저장 실패: ${error.message}`;
   } finally {

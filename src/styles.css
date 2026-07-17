@@ -461,6 +461,47 @@ progress::-moz-progress-bar {
   line-height: 1.6;
 }
 
+.settings-toggle {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: 0 0 20px;
+  padding: 13px 14px;
+  border: 1px solid rgba(255, 255, 255, .1);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, .045);
+  cursor: pointer;
+}
+
+.settings-toggle-copy {
+  display: grid;
+  flex: 1;
+  gap: 4px;
+}
+
+.settings-toggle-copy strong {
+  color: rgba(255, 255, 255, .86);
+  font-size: 13px;
+}
+
+.settings-toggle-copy small {
+  color: rgba(255, 255, 255, .52);
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.settings-toggle input {
+  display: none;
+}
+
+.settings-toggle input:checked + .switch {
+  background: var(--accent-color);
+}
+
+.settings-toggle input:checked + .switch::after {
+  transform: translateX(14px);
+}
+
 .settings-save {
   width: 100%;
   padding: 12px;

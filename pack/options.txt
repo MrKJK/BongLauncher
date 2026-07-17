@@ -51,7 +51,7 @@ damageTiltStrength:1.0
 highContrast:false
 highContrastBlockOutline:false
 narratorHotkey:true
-resourcePacks:["vanilla","fabric","file/봉봉리_애니메이션2.zip","file/봉봉리_애니메이션1.zip","file/봉봉리_3D.zip","file/[셰이더 유저 추천]봉봉리_하늘.zip"]
+resourcePacks:["vanilla","fabric","continuity:glass_pane_culling_fix","continuity:default","file/봉봉리_애니메이션2.zip","file/봉봉리_애니메이션1.zip","file/봉봉리_3D.zip","file/[셰이더 유저 추천]봉봉리_하늘.zip"]
 incompatibleResourcePacks:["enchdesc","entity_model_features","entity_texture_features","koreanpatch","modernfix","yet_another_config_lib_v3"]
 lastServer:
 lang:ko_kr
@@ -154,7 +154,7 @@ key_iris.keybind.shaderPackSelection:key.keyboard.unknown
 key_iris.keybind.wireframe:key.keyboard.unknown
 soundCategory_master:1.0
 soundCategory_music:0.0
-soundCategory_record:0.4037558685446008
+soundCategory_record:0.30516431924882614
 soundCategory_weather:0.1009389671361503
 soundCategory_block:1.0
 soundCategory_hostile:0.5

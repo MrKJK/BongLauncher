@@ -9,7 +9,8 @@
     "name": "Bongbongli",
     "host": "bongbongli.kr",
     "port": 25565,
-    "autoConnect": true
+    "autoConnect": true,
+    "acceptResourcePacks": true
   },
   "minecraft": {
     "version": "1.21.4",
