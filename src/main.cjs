@@ -16,7 +16,7 @@ let account;
 let currentManifest;
 let gameStarting = false;
 let gameProcess;
-const preservedGameFiles = new Set(["server.dat", "servers.dat"]);
+const preservedGameFiles = new Set(["server.dat"]);
 
 function configPath() {
   return app.isPackaged

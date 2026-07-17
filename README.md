@@ -129,7 +129,7 @@ npm.cmd run manifest -- pack manifest.json https://cdn.example.com/servercraft/f
 `strictMode`가 `true`이면 `watchDirectories` 안에서 manifest에 없는 파일을
 감지해 접속을 차단하고, 실행 시 제거합니다. 개인 설정처럼 유지할 파일은
 `ignoredFiles`에 추가합니다. 예외 파일은 manifest에 포함되어 있어도 검사하거나
-다운로드하지 않습니다. `server.dat`와 `servers.dat`는 항상 보존됩니다.
+다운로드하지 않습니다. `server.dat`는 항상 보존됩니다.
 
 사용자는 런처의 `게임 폴더` 버튼으로 모든 파일을 직접 수정할 수 있습니다.
 다만 관리 대상 파일을 수정한 경우 다음 실행에서 원본으로 복구됩니다.
@@ -172,9 +172,9 @@ npm.cmd run manifest -- pack manifest.json https://cdn.example.com/servercraft/f
 `server.properties`의 `resource-pack`과 `resource-pack-sha1`을 올바르게 설정해야
 실제 리소스팩이 전송됩니다.
 
-`options.txt`는 `onceFiles`에 포함되어 있으므로 모드팩 manifest가 변경된 첫 실행에만
-배포본을 적용하고 이후 사용자 수정을 유지합니다. `onceFiles`는 `ignoredFiles`보다
-우선합니다.
+`options.txt`와 `servers.dat`는 `onceFiles`에 포함되어 있으므로 각 원격 파일이
+변경된 뒤 첫 실행에만 배포본을 적용하고 이후 사용자 수정을 유지합니다.
+`onceFiles`는 `ignoredFiles`보다 우선합니다.
 
 ## 설치 파일 만들기
 

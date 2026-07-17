@@ -33,12 +33,12 @@
       "shaderpacks"
     ],
     "onceFiles": [
-      "options.txt"
+      "options.txt",
+      "servers.dat"
     ],
     "ignoredFiles": [
       "options.txt",
       "server.dat",
-      "servers.dat",
       "usercache.json",
       "logs/**",
       "crash-reports/**",

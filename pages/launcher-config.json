@@ -22,12 +22,12 @@
     "manifestUrl": "https://MrKJK.github.io/BongLauncher/files/manifest.json",
     "strictMode": true,
     "onceFiles": [
-      "options.txt"
+      "options.txt",
+      "servers.dat"
     ],
     "ignoredFiles": [
       "options.txt",
       "server.dat",
-      "servers.dat",
       "usercache.json",
       "logs/**",
       "crash-reports/**",
