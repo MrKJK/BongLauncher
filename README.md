@@ -299,5 +299,18 @@ manifest를 생성하고 GitHub Pages에 자동 배포합니다.
 예제 기본값:
 
 ```text
-%appdata%\ServerCraft\game
+%appdata%\BongLauncher\game
 ```
+
+## 시작 오류 진단
+
+Windows에서는 그래픽 드라이버 호환성을 위해 런처의 하드웨어 가속을 끕니다.
+원격 설정 캐시가 손상되면 캐시를 제거하고 내장 설정으로 자동 복구합니다.
+창이 열리기 전 오류, 렌더러 또는 GPU 프로세스 종료, 자동 업데이트 오류는 다음
+파일에 기록됩니다.
+
+```text
+%appdata%\BongLauncher\logs\launcher.log
+```
+
+시작에 실패하면 오류 대화상자에도 위 로그 경로가 표시됩니다.

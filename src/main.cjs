@@ -15,6 +15,56 @@ const {
   probeJava
 } = require("./java-runtime.cjs");
 
+const platformAppData = process.platform === "darwin"
+  ? path.join(os.homedir(), "Library", "Application Support")
+  : process.platform === "win32"
+    ? process.env.APPDATA || path.join(os.homedir(), "AppData", "Roaming")
+    : process.env.XDG_CONFIG_HOME || path.join(os.homedir(), ".config");
+const startupLogFile = path.join(platformAppData, "BongLauncher", "logs", "launcher.log");
+
+function appendLauncherLog(level, message, error) {
+  try {
+    fs.mkdirSync(path.dirname(startupLogFile), { recursive: true });
+    if (fs.existsSync(startupLogFile) && fs.statSync(startupLogFile).size > 1024 * 1024) {
+      const previous = path.join(path.dirname(startupLogFile), "launcher.previous.log");
+      fs.rmSync(previous, { force: true });
+      fs.renameSync(startupLogFile, previous);
+    }
+    const detail = error ? `\n${error.stack || error.message || String(error)}` : "";
+    fs.appendFileSync(
+      startupLogFile,
+      `[${new Date().toISOString()}] [${level}] ${message}${detail}\n`,
+      "utf8"
+    );
+  } catch {
+    // Startup diagnostics must never prevent the launcher from opening.
+  }
+}
+
+function reportFatalStartupError(title, error) {
+  appendLauncherLog("FATAL", title, error);
+  try {
+    dialog.showErrorBox(
+      title,
+      `${describeError(error)}\n\n진단 로그: ${startupLogFile}`
+    );
+  } catch {}
+}
+
+if (process.platform === "win32") app.disableHardwareAcceleration();
+appendLauncherLog(
+  "INFO",
+  `Launcher bootstrap version=${app.getVersion()} platform=${process.platform} arch=${process.arch}`
+);
+
+process.on("uncaughtException", (error) => {
+  reportFatalStartupError("BongLauncher 치명적 오류", error);
+  app.exit(1);
+});
+process.on("unhandledRejection", (error) => {
+  appendLauncherLog("ERROR", "Unhandled promise rejection", error);
+});
+
 let mainWindow;
 let config;
 let paths;
@@ -180,9 +230,14 @@ async function loadRuntimeConfig() {
     await writeJson(paths.remoteConfig, remote);
     return applyRemoteConfig(local, remote);
   } catch (error) {
-    const cached = await readJson(paths.remoteConfig);
-    if (cached) return applyRemoteConfig(local, cached);
-    console.warn(`Remote config unavailable: ${error.message}`);
+    appendLauncherLog("WARN", "Remote config unavailable", error);
+    try {
+      const cached = await readJson(paths.remoteConfig);
+      if (cached) return applyRemoteConfig(local, cached);
+    } catch (cacheError) {
+      appendLauncherLog("WARN", "Corrupted cached config was removed", cacheError);
+      await fsp.rm(paths.remoteConfig, { force: true }).catch(() => {});
+    }
     return local;
   }
 }
@@ -199,7 +254,7 @@ function configureAutoUpdater() {
   const feedUrl = config.updates.feedUrl;
   if (provider === "github") {
     if (!owner || owner.includes("YOUR_") || !repo) {
-      console.warn("GitHub auto update owner/repo is not configured.");
+      appendLauncherLog("WARN", "GitHub auto update owner/repo is not configured");
       return;
     }
   } else if (!feedUrl) {
@@ -229,7 +284,7 @@ function configureAutoUpdater() {
     sendProgress("최신 런처 버전입니다.", 0);
   });
   autoUpdater.on("error", (error) => {
-    console.warn(`Auto update failed: ${error.message}`);
+    appendLauncherLog("WARN", "Auto update failed", error);
     sendProgress("런처 업데이트 확인에 실패했습니다. 현재 버전으로 계속합니다.", 0);
   });
   autoUpdater.on("update-downloaded", async (info) => {
@@ -248,7 +303,7 @@ function configureAutoUpdater() {
   });
   setTimeout(() => {
     autoUpdater.checkForUpdates().catch((error) => {
-      console.warn(`Update check failed: ${error.message}`);
+      appendLauncherLog("WARN", "Update check failed", error);
     });
   }, 1500);
 }
@@ -1228,18 +1283,68 @@ async function createWindow() {
     }
   });
   mainWindow.removeMenu();
+  mainWindow.webContents.on("did-fail-load", (_, errorCode, errorDescription, validatedURL, isMainFrame) => {
+    if (!isMainFrame) return;
+    appendLauncherLog(
+      "ERROR",
+      `Renderer failed to load code=${errorCode} url=${validatedURL}`,
+      new Error(errorDescription)
+    );
+  });
+  mainWindow.webContents.on("render-process-gone", (_, details) => {
+    appendLauncherLog(
+      "ERROR",
+      `Renderer process ended reason=${details.reason} exitCode=${details.exitCode}`
+    );
+  });
+  mainWindow.on("unresponsive", () => appendLauncherLog("WARN", "Launcher window became unresponsive"));
+  mainWindow.on("closed", () => {
+    mainWindow = undefined;
+  });
   await mainWindow.loadFile(path.join(__dirname, "index.html"));
+  appendLauncherLog("INFO", "Launcher window loaded");
 }
 
-app.whenReady().then(async () => {
+async function startApplication() {
   config = await readJson(configPath());
+  if (!config?.launcherName) throw new Error("launcher-config.json이 올바르지 않습니다.");
   setupPaths();
   config = await loadRuntimeConfig();
   registerIpc();
   await createWindow();
   configureAutoUpdater();
-});
+  appendLauncherLog("INFO", "Launcher startup completed");
+}
 
-app.on("window-all-closed", () => {
-  if (process.platform !== "darwin") app.quit();
-});
+const hasSingleInstanceLock = app.requestSingleInstanceLock();
+if (!hasSingleInstanceLock) {
+  appendLauncherLog("INFO", "A second launcher instance was closed");
+  app.quit();
+} else {
+  app.on("second-instance", () => {
+    if (!mainWindow) return;
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.show();
+    mainWindow.focus();
+  });
+  app.on("child-process-gone", (_, details) => {
+    appendLauncherLog(
+      "ERROR",
+      `Electron child process ended type=${details.type} reason=${details.reason} exitCode=${details.exitCode}`
+    );
+  });
+  app.whenReady()
+    .then(startApplication)
+    .catch((error) => {
+      reportFatalStartupError("BongLauncher 시작 실패", error);
+      app.exit(1);
+    });
+  app.on("activate", () => {
+    if (BrowserWindow.getAllWindows().length === 0 && config) {
+      createWindow().catch((error) => reportFatalStartupError("BongLauncher 창 생성 실패", error));
+    }
+  });
+  app.on("window-all-closed", () => {
+    if (process.platform !== "darwin") app.quit();
+  });
+}
