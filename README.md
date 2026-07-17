@@ -62,7 +62,7 @@ npm.cmd start
     "loader": "fabric",
     "loaderVersion": "",
     "minMemoryMb": 2048,
-    "maxMemoryMb": 6144,
+    "maxMemoryMb": 4096,
     "javaMajor": 21
   }
 }

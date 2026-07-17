@@ -110,6 +110,109 @@ function describeError(error) {
     || "알 수 없는 오류";
 }
 
+function tailText(value, maxLines = 160) {
+  return String(value || "")
+    .split(/\r?\n/)
+    .slice(-maxLines)
+    .join("\n")
+    .trim();
+}
+
+async function readTextTail(file, maxLines = 160) {
+  try {
+    return tailText(await fsp.readFile(file, "utf8"), maxLines);
+  } catch (error) {
+    if (error.code === "ENOENT") return "";
+    throw error;
+  }
+}
+
+async function readRecentTextTail(file, startedAt, maxLines = 160) {
+  try {
+    const stat = await fsp.stat(file);
+    if (stat.mtimeMs < startedAt - 60_000) return "";
+    return readTextTail(file, maxLines);
+  } catch (error) {
+    if (error.code === "ENOENT") return "";
+    throw error;
+  }
+}
+
+async function newestDiagnosticFile(directory, pattern, startedAt) {
+  try {
+    const entries = await fsp.readdir(directory, { withFileTypes: true });
+    const candidates = await Promise.all(entries
+      .filter((entry) => entry.isFile() && pattern.test(entry.name))
+      .map(async (entry) => {
+        const file = path.join(directory, entry.name);
+        return { file, stat: await fsp.stat(file) };
+      }));
+    return candidates
+      .filter(({ stat }) => stat.mtimeMs >= startedAt - 60_000)
+      .sort((left, right) => right.stat.mtimeMs - left.stat.mtimeMs)[0]?.file;
+  } catch (error) {
+    if (error.code === "ENOENT") return undefined;
+    throw error;
+  }
+}
+
+function summarizeGameFailure(text) {
+  const normalized = String(text || "");
+  const rules = [
+    {
+      pattern: /OutOfMemoryError|Could not reserve enough space|Could not allocate|insufficient memory/i,
+      message: "메모리가 부족합니다. 런처 설정에서 램 할당량을 낮추고 다른 프로그램을 종료해 주세요."
+    },
+    {
+      pattern: /GLFW error|OpenGL|Failed to create window|Pixel format|Unsupported GPU|driver does not appear to support/i,
+      message: "그래픽 초기화에 실패했습니다. 그래픽 드라이버를 업데이트하고 셰이더를 끈 뒤 다시 실행해 주세요."
+    },
+    {
+      pattern: /Incompatible mod|Mod resolution encountered|Could not find required mod|Mixin transformation|Mixin apply failed/i,
+      message: "모드 호환성 오류가 발생했습니다. 런처를 다시 실행해 파일을 동기화해 주세요."
+    },
+    {
+      pattern: /UnsupportedClassVersionError|class file version/i,
+      message: "Java 버전이 맞지 않습니다. 런처의 자동 설치 Java를 다시 설치해야 합니다."
+    }
+  ];
+  const matched = rules.find((rule) => rule.pattern.test(normalized));
+  if (matched) return matched.message;
+
+  const useful = normalized
+    .split(/\r?\n/)
+    .filter((line) => /(?:ERROR|FATAL|Exception|Caused by:)/i.test(line))
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .slice(-3)
+    .join(" | ")
+    .replace(/\s+/g, " ");
+  return useful ? useful.slice(0, 260) : "종료 원인을 진단 로그에 기록했습니다.";
+}
+
+async function collectGameFailure(startedAt, processOutput) {
+  const latestLog = await readRecentTextTail(
+    path.join(paths.game, "logs", "latest.log"),
+    startedAt,
+    240
+  );
+  const crashReport = await newestDiagnosticFile(
+    path.join(paths.game, "crash-reports"),
+    /\.txt$/i,
+    startedAt
+  );
+  const javaCrash = await newestDiagnosticFile(paths.game, /^hs_err_pid\d+\.log$/i, startedAt);
+  const reportText = crashReport ? await readTextTail(crashReport, 240) : "";
+  const javaCrashText = javaCrash ? await readTextTail(javaCrash, 240) : "";
+  const combined = [processOutput, latestLog, reportText, javaCrashText].filter(Boolean).join("\n");
+  return {
+    summary: summarizeGameFailure(combined),
+    diagnostic: tailText(combined, 360),
+    crashReport,
+    javaCrash
+  };
+}
+
 async function retryOperation(label, operation, percent, attempts = 3) {
   let lastError;
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
@@ -152,7 +255,8 @@ async function updateLauncherState(patch) {
 
 function memoryLimitMb() {
   const totalMb = Math.floor(os.totalmem() / 1024 / 1024);
-  return Math.max(2048, Math.min(32768, totalMb - 1024));
+  // Integrated GPUs share system RAM, so leave at least half for Windows and graphics.
+  return Math.max(2048, Math.min(32768, Math.floor(totalMb / 2 / 512) * 512));
 }
 
 function applyLauncherState(state = {}) {
@@ -160,10 +264,13 @@ function applyLauncherState(state = {}) {
   if (typeof state.server?.acceptResourcePacks === "boolean") {
     config.server.acceptResourcePacks = state.server.acceptResourcePacks;
   }
-  const maxMemoryMb = Number(state.memory?.maxMemoryMb);
-  if (Number.isFinite(maxMemoryMb)) {
-    config.minecraft.maxMemoryMb = Math.max(1024, Math.min(memoryLimitMb(), Math.round(maxMemoryMb)));
-  }
+  const configuredMemoryMb = Number(config.minecraft.maxMemoryMb);
+  const savedMemoryMb = Number(state.memory?.maxMemoryMb);
+  const requestedMemoryMb = Number.isFinite(savedMemoryMb) ? savedMemoryMb : configuredMemoryMb;
+  config.minecraft.maxMemoryMb = Math.max(
+    config.minecraft.minMemoryMb,
+    Math.min(memoryLimitMb(), Math.round(requestedMemoryMb))
+  );
 }
 
 function setupPaths() {
@@ -1110,9 +1217,15 @@ async function launchGame() {
 
   let child;
   let createMinecraftProcessWatcher;
+  const launchStartedAt = Date.now();
+  const processOutput = [];
   try {
     await refreshAccount();
     const javaPath = await findOrInstallJava();
+    appendLauncherLog(
+      "INFO",
+      `Minecraft launch requested java=${javaPath} memory=${config.minecraft.minMemoryMb}-${config.minecraft.maxMemoryMb}MB`
+    );
     const manifest = await syncDistribution();
     const verification = await verifyFiles(manifest);
     if (!verification.valid) throw new Error(`서버 접속 차단: ${verification.problems.join(", ")}`);
@@ -1164,21 +1277,51 @@ async function launchGame() {
   } catch (error) {
     gameStarting = false;
     const detail = describeError(error);
+    appendLauncherLog("ERROR", `Minecraft launch preparation failed: ${detail}`, error);
     sendGameState(false, `실행 실패: ${detail}`);
     throw new Error(detail, { cause: error });
   }
 
   gameStarting = false;
   gameProcess = child;
-  child.stdout?.on("data", (data) => mainWindow?.webContents.send("game-log", data.toString().trim()));
-  child.stderr?.on("data", (data) => mainWindow?.webContents.send("game-log", data.toString().trim()));
+  const captureOutput = (data) => {
+    const line = data.toString().trim();
+    if (!line) return;
+    processOutput.push(line);
+    while (processOutput.length > 240) processOutput.shift();
+    mainWindow?.webContents.send("game-log", line);
+  };
+  child.stdout?.on("data", captureOutput);
+  child.stderr?.on("data", captureOutput);
   const finishGame = (code) => {
     if (gameProcess !== child) return;
     gameProcess = undefined;
-    const message = `Minecraft가 종료되었습니다. (코드 ${code ?? "-"})`;
-    sendProgress(message, 0);
-    sendGameState(false, message);
+    if (code === 0) {
+      const message = "Minecraft가 종료되었습니다.";
+      appendLauncherLog("INFO", message);
+      sendProgress(message, 0);
+      sendGameState(false, message);
+      return;
+    }
+    void collectGameFailure(launchStartedAt, processOutput.join("\n"))
+      .then((failure) => {
+        const message = `Minecraft 실행 실패 (코드 ${code ?? "-"}): ${failure.summary}`;
+        const source = failure.crashReport || failure.javaCrash || path.join(paths.game, "logs", "latest.log");
+        appendLauncherLog("ERROR", `${message}\n원본 로그: ${source}\n${failure.diagnostic}`);
+        sendProgress(message, 0, `진단 로그: ${startupLogFile}`);
+        sendGameState(false, message);
+      })
+      .catch((error) => {
+        const message = `Minecraft가 비정상 종료되었습니다. (코드 ${code ?? "-"})`;
+        appendLauncherLog("ERROR", "Minecraft exit diagnosis failed", error);
+        sendProgress(message, 0, `진단 로그: ${startupLogFile}`);
+        sendGameState(false, message);
+      });
   };
+  child.once("error", (error) => {
+    appendLauncherLog("ERROR", "Minecraft process error", error);
+    captureOutput(error.stack || error.message);
+  });
   child.once("exit", (code) => finishGame(code));
   try {
     const watcher = createMinecraftProcessWatcher(child);
