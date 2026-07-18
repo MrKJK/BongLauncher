@@ -28,6 +28,7 @@
     "ignoredFiles": [
       "options.txt",
       "server.dat",
+      "config/iris.properties",
       "usercache.json",
       "logs/**",
       "crash-reports/**",
@@ -38,8 +39,24 @@
   "gameOptions": {
     "applyMode": "once",
     "lang": "ko_kr",
-    "resourcePacks": [],
-    "incompatibleResourcePacks": [],
+    "resourcePacks": [
+      "vanilla",
+      "fabric",
+      "continuity:glass_pane_culling_fix",
+      "continuity:default",
+      "file/봉봉리_애니메이션2.zip",
+      "file/봉봉리_애니메이션1.zip",
+      "file/봉봉리_3D.zip",
+      "file/[셰이더 유저 추천]봉봉리_하늘.zip"
+    ],
+    "incompatibleResourcePacks": [
+      "enchdesc",
+      "entity_model_features",
+      "entity_texture_features",
+      "koreanpatch",
+      "modernfix",
+      "yet_another_config_lib_v3"
+    ],
     "keyBindings": {}
   }
 }
