@@ -7,6 +7,7 @@ const net = require("net");
 const http = require("http");
 const os = require("os");
 const { autoUpdater } = require("electron-updater");
+const { Agent, interceptors } = require("undici");
 const { formatServerAddress, updateServerResourcePackFile } = require("./server-list.cjs");
 const {
   applyRuntimeExecutablePermissions,
@@ -157,6 +158,57 @@ async function newestDiagnosticFile(directory, pattern, startedAt) {
     if (error.code === "ENOENT") return undefined;
     throw error;
   }
+}
+
+function createJavaDownloadDispatcher() {
+  return new Agent({
+    connections: 8,
+    connectTimeout: 45_000,
+    headersTimeout: 90_000,
+    bodyTimeout: 120_000,
+    autoSelectFamily: true,
+    autoSelectFamilyAttemptTimeout: 1_000
+  }).compose(
+    interceptors.retry({
+      maxRetries: 4,
+      minTimeout: 1_000,
+      maxTimeout: 10_000,
+      timeoutFactor: 2,
+      errorCodes: [
+        "UND_ERR_CONNECT_TIMEOUT",
+        "UND_ERR_HEADERS_TIMEOUT",
+        "UND_ERR_BODY_TIMEOUT",
+        "UND_ERR_SOCKET",
+        "ECONNRESET",
+        "ECONNREFUSED",
+        "ENOTFOUND",
+        "ENETDOWN",
+        "ENETUNREACH",
+        "EHOSTUNREACH",
+        "ETIMEDOUT",
+        "EPIPE"
+      ]
+    }),
+    interceptors.redirect({ maxRedirections: 5 })
+  );
+}
+
+async function removeEmptyFiles(directory) {
+  let entries;
+  try {
+    entries = await fsp.readdir(directory, { withFileTypes: true });
+  } catch (error) {
+    if (error.code === "ENOENT") return;
+    throw error;
+  }
+  await Promise.all(entries.map(async (entry) => {
+    const absolute = path.join(directory, entry.name);
+    if (entry.isDirectory()) {
+      await removeEmptyFiles(absolute);
+    } else if (entry.isFile() && (await fsp.stat(absolute)).size === 0) {
+      await fsp.rm(absolute, { force: true });
+    }
+  }));
 }
 
 function summarizeGameFailure(text) {
@@ -953,6 +1005,7 @@ async function findOrInstallJava() {
   sendProgress(`Java ${config.minecraft.javaMajor} 파일을 복구하고 있습니다.`, 5);
   await fsp.rm(paths.runtimeState, { force: true });
   let mojangFailure;
+  const javaDispatcher = createJavaDownloadDispatcher();
   try {
     const targets = [
       "java-runtime-delta",
@@ -965,7 +1018,7 @@ async function findOrInstallJava() {
     let manifest;
     for (const target of targets) {
       try {
-        const candidate = await fetchJavaRuntimeManifest({ target });
+        const candidate = await fetchJavaRuntimeManifest({ target, dispatcher: javaDispatcher });
         const major = Number.parseInt(candidate.version?.name, 10);
         if (major === config.minecraft.javaMajor) {
           manifest = candidate;
@@ -979,13 +1032,35 @@ async function findOrInstallJava() {
       throw new Error(`Mojang에서 Java ${config.minecraft.javaMajor} 런타임을 찾지 못했습니다.`);
     }
     await fsp.rm(paths.runtime, { recursive: true, force: true });
-    const task = installJavaRuntimeTask({ destination: paths.runtime, manifest });
-    await task.startAndWait({
-      onUpdate() {
-        const percent = task.total > 0 ? Math.round((task.progress / task.total) * 15) : 8;
-        sendProgress(`Mojang Java ${config.minecraft.javaMajor} 설치 중`, percent);
+    for (let attempt = 1; attempt <= 3; attempt += 1) {
+      const task = installJavaRuntimeTask({
+        destination: paths.runtime,
+        manifest,
+        dispatcher: javaDispatcher
+      });
+      try {
+        await task.startAndWait({
+          onUpdate() {
+            const percent = task.total > 0 ? Math.round((task.progress / task.total) * 15) : 8;
+            sendProgress(
+              `Mojang Java ${config.minecraft.javaMajor} 설치 중 (${attempt}/3)`,
+              percent
+            );
+          }
+        });
+        break;
+      } catch (error) {
+        appendLauncherLog("WARN", `Mojang Java installation attempt ${attempt} failed`, error);
+        await removeEmptyFiles(paths.runtime);
+        if (attempt === 3) throw error;
+        sendProgress(
+          `Java 다운로드에 실패해 다시 시도합니다. (${attempt + 1}/3)`,
+          5,
+          describeError(error)
+        );
+        await new Promise((resolve) => setTimeout(resolve, attempt * 2_000));
       }
-    });
+    }
     await applyRuntimeExecutablePermissions(paths.runtime, process.platform, manifest);
     const installed = await findRuntimeJava({
       root: paths.runtime,
@@ -1007,6 +1082,8 @@ async function findOrInstallJava() {
     return installed;
   } catch (error) {
     mojangFailure = error;
+  } finally {
+    await javaDispatcher.close().catch(() => {});
   }
 
   if (process.platform !== "darwin") throw mojangFailure;
