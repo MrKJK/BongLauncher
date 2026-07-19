@@ -5,10 +5,13 @@ const os = require("os");
 const path = require("path");
 const {
   applyRuntimeExecutablePermissions,
+  fetchMojangJavaRuntimeManifest,
   findRuntimeJava,
   installTemurinRuntime,
   manifestJavaCandidates,
+  mojangRuntimePlatform,
   parseJavaMajor,
+  parseRuntimeVersionMajor,
   runtimeFingerprint,
   temurinMetadataUrl
 } = require("../src/java-runtime.cjs");
@@ -51,7 +54,42 @@ async function main() {
 
     assert.equal(parseJavaMajor('openjdk version "21.0.11" 2026-04-21 LTS'), 21);
     assert.equal(parseJavaMajor('java version "1.8.0_401"'), 8);
+    assert.equal(parseRuntimeVersionMajor("21.0.7"), 21);
+    assert.equal(parseRuntimeVersionMajor("8u51-cacert"), 8);
+    assert.equal(mojangRuntimePlatform("win32", "x64"), "windows-x64");
+    assert.equal(mojangRuntimePlatform("win32", "arm64"), "windows-arm64");
+    assert.equal(mojangRuntimePlatform("darwin", "arm64"), "mac-os-arm64");
     assert.match(temurinMetadataUrl(21, "arm64"), /architecture=aarch64/);
+
+    const requests = [];
+    const fetchedManifest = await fetchMojangJavaRuntimeManifest({
+      majorVersion: 21,
+      platform: "win32",
+      arch: "x64",
+      requestImpl: async (url) => {
+        requests.push(url);
+        return {
+          statusCode: 200,
+          body: {
+            json: async () => requests.length === 1 ? {
+              "windows-x64": {
+                "java-runtime-beta": [{
+                  manifest: { url: "https://example.test/java-17.json" },
+                  version: { name: "17.0.15" }
+                }],
+                "java-runtime-delta": [{
+                  manifest: { url: "https://example.test/java-21.json" },
+                  version: { name: "21.0.7" }
+                }]
+              }
+            } : { files: { "bin/javaw.exe": { type: "file" } } }
+          }
+        };
+      }
+    });
+    assert.equal(fetchedManifest.target, "java-runtime-delta");
+    assert.equal(fetchedManifest.version.name, "21.0.7");
+    assert.equal(requests[1], "https://example.test/java-21.json");
 
     const home = path.join(root, "runtime-home");
     const runtimeJava = path.join(home, "bin", process.platform === "win32" ? "javaw.exe" : "java");

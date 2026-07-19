@@ -1,6 +1,6 @@
 {
   "name": "bonglauncher",
-  "version": "0.2.24",
+  "version": "0.2.25",
   "description": "Minecraft server-specific launcher with Microsoft login, modpack sync, integrity checks, and server status.",
   "main": "src/main.cjs",
   "type": "commonjs",
@@ -76,7 +76,6 @@
     "sharp": "^0.35.1"
   },
   "overrides": {
-    "undici": "$undici",
     "uuid": "11.1.1"
   },
   "repository": {

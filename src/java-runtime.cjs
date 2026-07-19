@@ -4,8 +4,20 @@ const path = require("path");
 const crypto = require("crypto");
 const { execFile } = require("child_process");
 const { promisify } = require("util");
+const { request } = require("undici");
 
 const execFileAsync = promisify(execFile);
+const MOJANG_JAVA_RUNTIME_INDEX_URL = "https://launchermeta.mojang.com/v1/products/java-runtime/2ec0cc96c44e5a76b9c8b7c39df7210883d12871/all.json";
+const MOJANG_RUNTIME_TARGETS = [
+  "java-runtime-delta",
+  "java-runtime-epsilon",
+  "java-runtime-gamma",
+  "java-runtime-gamma-snapshot",
+  "java-runtime-beta",
+  "java-runtime-alpha",
+  "jre-legacy",
+  "minecraft-java-exe"
+];
 
 function executableName(platform) {
   return platform === "win32" ? "javaw.exe" : "java";
@@ -79,6 +91,78 @@ function parseJavaMajor(output) {
   const match = /(?:java|openjdk) version "(?:1\.)?(\d+)/i.exec(output)
     || /openjdk\s+(\d+)/i.exec(output);
   return match ? Number.parseInt(match[1], 10) : undefined;
+}
+
+function parseRuntimeVersionMajor(version) {
+  const match = /^(?:1\.)?(\d+)/.exec(String(version || ""));
+  return match ? Number.parseInt(match[1], 10) : undefined;
+}
+
+function mojangRuntimePlatform(platform, arch) {
+  if (platform === "win32") {
+    if (arch === "arm64") return "windows-arm64";
+    if (arch === "ia32" || arch === "x86" || arch === "x32") return "windows-x86";
+    return "windows-x64";
+  }
+  if (platform === "darwin") return arch === "arm64" ? "mac-os-arm64" : "mac-os";
+  if (platform === "linux") return arch === "ia32" || arch === "x86" || arch === "x32" ? "linux-i386" : "linux";
+  throw new Error(`지원하지 않는 Java 런타임 플랫폼입니다: ${platform}/${arch}`);
+}
+
+async function requestJson(url, dispatcher, requestImpl) {
+  const response = await requestImpl(url, { dispatcher });
+  if (response.statusCode < 200 || response.statusCode >= 300) {
+    await response.body.dump?.();
+    throw new Error(`${url} 요청 실패: HTTP ${response.statusCode}`);
+  }
+  return response.body.json();
+}
+
+async function fetchMojangJavaRuntimeManifest({
+  majorVersion,
+  platform,
+  arch,
+  dispatcher,
+  requestImpl = request,
+  indexUrl = MOJANG_JAVA_RUNTIME_INDEX_URL
+}) {
+  const index = await requestJson(indexUrl, dispatcher, requestImpl);
+  const platformKey = mojangRuntimePlatform(platform, arch);
+  const runtimes = index?.[platformKey];
+  if (!runtimes) throw new Error(`Mojang Java 목록에 ${platformKey} 플랫폼이 없습니다.`);
+
+  let selected;
+  for (const target of MOJANG_RUNTIME_TARGETS) {
+    const candidate = runtimes[target]?.find(
+      (entry) => parseRuntimeVersionMajor(entry?.version?.name) === Number(majorVersion)
+    );
+    if (candidate) {
+      selected = { target, entry: candidate };
+      break;
+    }
+  }
+  if (!selected?.entry?.manifest?.url) {
+    const available = [...new Set(Object.values(runtimes)
+      .flat()
+      .map((entry) => parseRuntimeVersionMajor(entry?.version?.name))
+      .filter(Number.isFinite))]
+      .sort((left, right) => left - right)
+      .join(", ");
+    throw new Error(
+      `Mojang에서 ${platformKey}용 Java ${majorVersion} 런타임을 찾지 못했습니다.`
+      + (available ? ` 사용 가능한 버전: ${available}` : "")
+    );
+  }
+
+  const manifest = await requestJson(selected.entry.manifest.url, dispatcher, requestImpl);
+  if (!manifest?.files || typeof manifest.files !== "object") {
+    throw new Error("Mojang Java 런타임 파일 목록이 올바르지 않습니다.");
+  }
+  return {
+    files: manifest.files,
+    target: selected.target,
+    version: selected.entry.version
+  };
 }
 
 async function probeJava(executable) {
@@ -189,11 +273,14 @@ async function installTemurinRuntime({
 
 module.exports = {
   applyRuntimeExecutablePermissions,
+  fetchMojangJavaRuntimeManifest,
   findRuntimeJava,
   installTemurinRuntime,
   javaCandidates,
   manifestJavaCandidates,
+  mojangRuntimePlatform,
   parseJavaMajor,
+  parseRuntimeVersionMajor,
   probeJava,
   runtimeFingerprint,
   temurinMetadataUrl

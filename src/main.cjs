@@ -11,6 +11,7 @@ const { Agent, interceptors } = require("undici");
 const { formatServerAddress, updateServerResourcePackFile } = require("./server-list.cjs");
 const {
   applyRuntimeExecutablePermissions,
+  fetchMojangJavaRuntimeManifest,
   findRuntimeJava,
   installTemurinRuntime,
   probeJava,
@@ -979,7 +980,7 @@ async function syncDistribution() {
 }
 
 async function findOrInstallJava() {
-  const { fetchJavaRuntimeManifest, installJavaRuntimeTask } = require("@xmcl/installer");
+  const { installJavaRuntimeTask } = require("@xmcl/installer");
   const bundled = await findRuntimeJava({
     root: paths.runtime,
     platform: process.platform,
@@ -1007,30 +1008,12 @@ async function findOrInstallJava() {
   let mojangFailure;
   const javaDispatcher = createJavaDownloadDispatcher();
   try {
-    const targets = [
-      "java-runtime-delta",
-      "java-runtime-gamma",
-      "java-runtime-beta",
-      "java-runtime-alpha",
-      "jre-legacy",
-      "minecraft-java-exe"
-    ];
-    let manifest;
-    for (const target of targets) {
-      try {
-        const candidate = await fetchJavaRuntimeManifest({ target, dispatcher: javaDispatcher });
-        const major = Number.parseInt(candidate.version?.name, 10);
-        if (major === config.minecraft.javaMajor) {
-          manifest = candidate;
-          break;
-        }
-      } catch {
-        // Mojang does not publish every target for every platform.
-      }
-    }
-    if (!manifest) {
-      throw new Error(`Mojang에서 Java ${config.minecraft.javaMajor} 런타임을 찾지 못했습니다.`);
-    }
+    const manifest = await fetchMojangJavaRuntimeManifest({
+      majorVersion: config.minecraft.javaMajor,
+      platform: process.platform,
+      arch: process.arch,
+      dispatcher: javaDispatcher
+    });
     await fsp.rm(paths.runtime, { recursive: true, force: true });
     for (let attempt = 1; attempt <= 3; attempt += 1) {
       const task = installJavaRuntimeTask({
