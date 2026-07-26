@@ -115,6 +115,25 @@ function describeError(error) {
     || "알 수 없는 오류";
 }
 
+function describeLoginError(error) {
+  const detail = describeError(error);
+  if (/invalid app registration/i.test(detail)) {
+    return "Microsoft의 Minecraft API 앱 등록이 아직 승인되지 않았거나 등록 정보가 유효하지 않습니다.";
+  }
+  if (/does not own|소유하지 않았습니다/i.test(detail)) {
+    return "이 Microsoft 계정은 Minecraft Java Edition을 소유하지 않았습니다.";
+  }
+  if (/timeout|timed out|시간이 만료/i.test(detail)) {
+    return "Microsoft 로그인 서버 연결 시간이 초과되었습니다. 네트워크를 확인한 뒤 다시 시도해 주세요.";
+  }
+  return detail;
+}
+
+function requiresInteractiveLogin(error) {
+  return /invalid_grant|interaction[_ ]required|sign in again|grant has expired|AADSTS(?:50173|70000|70008|700082|700084)/i
+    .test(describeError(error));
+}
+
 function tailText(value, maxLines = 160) {
   return String(value || "")
     .split(/\r?\n/)
@@ -659,19 +678,34 @@ async function exchangeMinecraftAccount(oauth) {
 async function refreshAccount() {
   if (!account?.refreshToken) throw new Error("Microsoft 로그인이 필요합니다.");
   if (account.minecraftExpiresAt > Date.now() + 60_000 && account.xuid) return account;
-  const oauth = await fetchJson("https://login.microsoftonline.com/consumers/oauth2/v2.0/token", {
-    method: "POST",
-    headers: { "content-type": "application/x-www-form-urlencoded" },
-    body: formBody({
-      client_id: config.microsoft.clientId,
-      grant_type: "refresh_token",
-      refresh_token: account.refreshToken,
-      scope: "XboxLive.signin offline_access"
-    })
-  });
+  let oauth;
+  let previousRefreshToken = account.refreshToken;
+  try {
+    oauth = await fetchJson("https://login.microsoftonline.com/consumers/oauth2/v2.0/token", {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body: formBody({
+        client_id: config.microsoft.clientId,
+        grant_type: "refresh_token",
+        refresh_token: previousRefreshToken,
+        scope: "XboxLive.signin offline_access"
+      })
+    });
+  } catch (error) {
+    if (!requiresInteractiveLogin(error)) throw error;
+    appendLauncherLog(
+      "WARN",
+      `Microsoft refresh token requires interactive login: ${describeError(error)}`
+    );
+    sendProgress("Microsoft 로그인 세션이 만료되었습니다. 브라우저에서 다시 로그인해 주세요.", 0);
+    oauth = await loginWithBrowser();
+    previousRefreshToken = "";
+  }
+
   const refreshed = await exchangeMinecraftAccount(oauth);
-  if (!refreshed.refreshToken) refreshed.refreshToken = account.refreshToken;
+  if (!refreshed.refreshToken) refreshed.refreshToken = previousRefreshToken;
   await saveAccount(refreshed);
+  mainWindow?.webContents.send("account-updated", { id: refreshed.id, name: refreshed.name });
   return refreshed;
 }
 
@@ -1463,11 +1497,21 @@ function registerIpc() {
   });
   ipcMain.handle("server:refresh", queryServer);
   ipcMain.handle("auth:login", async () => {
-    const oauth = await loginWithBrowser();
-    sendProgress("Minecraft 계정 정보를 확인하고 있습니다.", 0);
-    const result = await exchangeMinecraftAccount(oauth);
-    await saveAccount(result);
-    return { id: result.id, name: result.name };
+    let phase = "Microsoft 브라우저 인증";
+    try {
+      const oauth = await loginWithBrowser();
+      phase = "Xbox 및 Minecraft 계정 확인";
+      sendProgress("Minecraft 계정 정보를 확인하고 있습니다.", 0);
+      const result = await exchangeMinecraftAccount(oauth);
+      phase = "계정 정보 저장";
+      await saveAccount(result);
+      appendLauncherLog("INFO", `Microsoft login completed account=${result.name}`);
+      return { id: result.id, name: result.name };
+    } catch (error) {
+      const detail = describeError(error);
+      appendLauncherLog("ERROR", `Microsoft login failed phase=${phase}: ${detail}`, error);
+      throw new Error(`${describeLoginError(error)} (단계: ${phase})`);
+    }
   });
   ipcMain.handle("auth:logout", async () => {
     await saveAccount(null);

@@ -12,6 +12,12 @@ let state;
 let busy = false;
 let gameRunning = false;
 
+function errorMessage(error) {
+  return String(error?.message || error || "알 수 없는 오류")
+    .replace(/^Error invoking remote method '[^']+':\s*/i, "")
+    .replace(/^Error:\s*/i, "");
+}
+
 function renderPlayButton() {
   elements["play-label"].textContent = gameRunning ? "게임 실행 중" : "게임 시작";
   elements.play.disabled = busy || gameRunning || !state?.account;
@@ -135,6 +141,11 @@ window.launcher.onProgress(({ message, percent = 0, detail = "" }) => {
   }
 });
 
+window.launcher.onAccountUpdated((account) => {
+  state.account = account;
+  renderAccount(account);
+});
+
 window.launcher.onGameLog((line) => {
   elements.log.textContent = `${line}\n${elements.log.textContent}`.slice(0, 6000);
 });
@@ -190,7 +201,7 @@ elements.login.addEventListener("click", async () => {
       ? "로그인되었습니다."
       : "로그아웃되었습니다.";
   } catch (error) {
-    elements.status.textContent = `로그인 실패: ${error.message}`;
+    elements.status.textContent = `로그인 실패: ${errorMessage(error)}`;
   } finally {
     setBusy(false);
   }
