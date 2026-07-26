@@ -40,6 +40,8 @@
       "options.txt",
       "server.dat",
       "config/iris.properties",
+      "config/voicechat/**",
+      "config/emotecraft.json",
       "usercache.json",
       "logs/**",
       "crash-reports/**",
