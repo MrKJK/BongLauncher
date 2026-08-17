@@ -7,7 +7,7 @@ const net = require("net");
 const http = require("http");
 const os = require("os");
 const { autoUpdater } = require("electron-updater");
-const { Agent, interceptors } = require("undici");
+const { Agent, fetch: undiciFetch, interceptors } = require("undici");
 const { formatServerAddress, updateServerResourcePackFile } = require("./server-list.cjs");
 const {
   applyRuntimeExecutablePermissions,
@@ -19,6 +19,10 @@ const {
 } = require("./java-runtime.cjs");
 
 const RUNTIME_INTEGRITY_REVISION = 2;
+const MINECRAFT_ASSET_HOSTS = [
+  "https://resources.download.minecraft.net",
+  "https://bmclapi2.bangbang93.com/assets"
+];
 
 const platformAppData = process.platform === "darwin"
   ? path.join(os.homedir(), "Library", "Application Support")
@@ -180,7 +184,7 @@ async function newestDiagnosticFile(directory, pattern, startedAt) {
   }
 }
 
-function createJavaDownloadDispatcher() {
+function createResilientDownloadDispatcher() {
   return new Agent({
     connections: 8,
     connectTimeout: 45_000,
@@ -211,6 +215,17 @@ function createJavaDownloadDispatcher() {
     }),
     interceptors.redirect({ maxRedirections: 5 })
   );
+}
+
+function createGameDownloadOptions(dispatcher) {
+  return {
+    dispatcher,
+    assetsHost: MINECRAFT_ASSET_HOSTS,
+    assetsDownloadConcurrency: 8,
+    librariesDownloadConcurrency: 8,
+    throwErrorImmediately: false,
+    fetch: (url, options = {}) => undiciFetch(url, { ...options, dispatcher })
+  };
 }
 
 async function removeEmptyFiles(directory) {
@@ -1040,7 +1055,7 @@ async function findOrInstallJava() {
   sendProgress(`Java ${config.minecraft.javaMajor} 파일을 복구하고 있습니다.`, 5);
   await fsp.rm(paths.runtimeState, { force: true });
   let mojangFailure;
-  const javaDispatcher = createJavaDownloadDispatcher();
+  const javaDispatcher = createResilientDownloadDispatcher();
   try {
     const manifest = await fetchMojangJavaRuntimeManifest({
       majorVersion: config.minecraft.javaMajor,
@@ -1142,12 +1157,22 @@ async function findOrInstallJava() {
 }
 
 async function installGame(javaPath) {
+  const dispatcher = createResilientDownloadDispatcher();
+  try {
+    return await installGameWithDispatcher(javaPath, dispatcher);
+  } finally {
+    await dispatcher.close().catch(() => {});
+  }
+}
+
+async function installGameWithDispatcher(javaPath, dispatcher) {
   const installer = require("@xmcl/installer");
   const minecraft = paths.game;
   const version = config.minecraft.version;
+  const downloadOptions = createGameDownloadOptions(dispatcher);
   const versions = await retryOperation(
     "Minecraft 버전 정보 확인",
-    () => installer.getVersionList(),
+    () => installer.getVersionList({ fetch: downloadOptions.fetch }),
     18
   );
   const metadata = versions.versions.find((item) => item.id === version);
@@ -1156,7 +1181,11 @@ async function installGame(javaPath) {
   sendProgress(`Minecraft ${version} 설치 상태 확인 중`, 20);
   await retryOperation(
     `Minecraft ${version} 설치`,
-    () => installer.install(metadata, minecraft),
+    async () => {
+      await removeEmptyFiles(path.join(minecraft, "assets"));
+      await removeEmptyFiles(path.join(minecraft, "libraries"));
+      return installer.install(metadata, minecraft, downloadOptions);
+    },
     20
   );
   let launchVersion = version;
@@ -1236,17 +1265,33 @@ async function installGame(javaPath) {
   return launchVersion;
 }
 
-async function ensureLaunchLibraries(launchVersion) {
+async function ensureLaunchDependencies(launchVersion) {
   const installer = require("@xmcl/installer");
   const { Version } = require("@xmcl/core");
-  sendProgress("필수 라이브러리를 확인하고 있습니다.", 82);
+  sendProgress("Minecraft 필수 파일을 확인하고 있습니다.", 82);
   const resolvedVersion = await Version.parse(paths.game, launchVersion);
-  await retryOperation(
-    "Minecraft 필수 라이브러리 설치",
-    () => installer.installLibraries(resolvedVersion),
-    82
-  );
-  return resolvedVersion;
+  const dispatcher = createResilientDownloadDispatcher();
+  const downloadOptions = createGameDownloadOptions(dispatcher);
+  try {
+    await retryOperation(
+      "Minecraft 필수 파일 설치",
+      async () => {
+        await removeEmptyFiles(path.join(paths.game, "assets"));
+        await removeEmptyFiles(path.join(paths.game, "libraries"));
+        await Promise.all([
+          installer.installAssets(resolvedVersion, {
+            ...downloadOptions,
+            prevalidSizeOnly: true
+          }),
+          installer.installLibraries(resolvedVersion, downloadOptions)
+        ]);
+      },
+      82
+    );
+    return resolvedVersion;
+  } finally {
+    await dispatcher.close().catch(() => {});
+  }
 }
 
 async function applyGameOptions() {
@@ -1375,7 +1420,7 @@ async function launchGame() {
       && installed.loader === config.minecraft.loader.toLowerCase()
       && installed.loaderVersion === config.minecraft.loaderVersion;
     const launchVersion = expectedProfile ? installed.launchVersion : await installGame(javaPath);
-    const resolvedVersion = await ensureLaunchLibraries(launchVersion);
+    const resolvedVersion = await ensureLaunchDependencies(launchVersion);
     sendProgress("서버 리소스팩 설정을 확인하고 있습니다.", 88);
     await applyServerResourcePackPolicy();
     await createLaunchSession(manifest);
